@@ -1,0 +1,38 @@
+{
+	"name": "@euroclaw/storage-durable",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "SQL-backed durable stores (ApprovalStore) over the @euroclaw/storage-core Adapter port — the bridge between @euroclaw/core's ports and any storage adapter.",
+	"license": "MIT",
+	"author": "Konstantin Ponomarev",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "tsc",
+		"test": "vitest run src",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@euroclaw/core": "workspace:*",
+		"@euroclaw/errors": "workspace:*",
+		"@euroclaw/storage-core": "workspace:*",
+		"@noble/hashes": "2.2.0",
+		"arktype": "2.2.0"
+	},
+	"devDependencies": {
+		"@euroclaw/storage-kysely": "workspace:*",
+		"@types/better-sqlite3": "7.6.13",
+		"better-sqlite3": "12.11.1",
+		"kysely": "0.29.2"
+	}
+}

@@ -1,0 +1,25 @@
+// Test-only schema — exercises the @euroclaw/storage-prisma adapter against a real SQLite DB.
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:./test.db"
+}
+
+model Approval {
+  id     String  @id
+  status String?
+}
+
+model Audit {
+  id   Int     @id @default(autoincrement())
+  seq  Int
+  name String?
+}
+
+model Token {
+  id     String  @id
+  digest String?
+}

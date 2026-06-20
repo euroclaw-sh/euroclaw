@@ -1,0 +1,241 @@
+/**
+ * @euroclaw/storage-kysely — the @euroclaw/storage-core Adapter port over a Kysely query builder.
+ *
+ * `kyselyAdapter` takes either a ready Kysely instance OR a raw driver/pool you already have
+ * (a better-sqlite3 `Database`, a `pg` `Pool`, a Kysely `Dialect`, or `{ dialect|db, type }`). Raw
+ * inputs are duck-typed and wrapped in Kysely — the same convenience as Better Auth's pool path
+ * (`packages/kysely-adapter/src/dialect.ts`: `createKyselyAdapter` / `getKyselyDatabaseType`), so
+ * a single Kysely-backed adapter covers every SQL driver. SQLite + Postgres today; a MySQL/MSSQL
+ * input is rejected up front (create/update rely on RETURNING, which those lack).
+ *
+ * Modeled on Better Auth's Kysely adapter: https://github.com/better-auth/better-auth —
+ * `packages/kysely-adapter`. The CRUD/where translation here is euroclaw's own, written against
+ * Kysely's public API. MIT, © 2024-present Bereket Engida. See THIRD_PARTY_NOTICES.md.
+ */
+
+import {
+	configurationError,
+	unsupportedOperationError,
+} from "@euroclaw/errors";
+import type { Adapter, Where, WhereOperator } from "@euroclaw/storage-core";
+import {
+	type Dialect,
+	type Expression,
+	Kysely,
+	PostgresDialect,
+	type PostgresPool,
+	type SqliteDatabase,
+	SqliteDialect,
+	sql,
+} from "kysely";
+
+const SQL_OP: Record<Exclude<WhereOperator, "in" | "contains">, string> = {
+	eq: "=",
+	ne: "!=",
+	lt: "<",
+	lte: "<=",
+	gt: ">",
+	gte: ">=",
+};
+
+/** A raw SQL boolean expression from Where[], left-folded by each clause's connector. */
+function whereExpr(where: Where[]): Expression<boolean> | undefined {
+	let combined: Expression<boolean> | undefined;
+	for (const w of where) {
+		const col = sql.ref(w.field);
+		const op = w.operator ?? "eq";
+		let clause: Expression<boolean>;
+		if (w.value === null) {
+			if (op === "eq") clause = sql<boolean>`${col} is null`;
+			else if (op === "ne") clause = sql<boolean>`${col} is not null`;
+			else {
+				throw configurationError(
+					`@euroclaw/storage-kysely: where operator "${op}" cannot compare null`,
+					{ field: w.field, operator: op },
+				);
+			}
+		} else if (op === "in") {
+			const list = (w.value as unknown[]).map((v) => sql`${v}`);
+			clause = sql<boolean>`${col} in (${sql.join(list)})`;
+		} else if (op === "contains") {
+			clause = sql<boolean>`${col} like ${`%${w.value}%`}`;
+		} else {
+			clause = sql<boolean>`${col} ${sql.raw(SQL_OP[op])} ${w.value}`;
+		}
+		combined =
+			combined === undefined
+				? clause
+				: w.connector === "OR"
+					? sql<boolean>`(${combined} or ${clause})`
+					: sql<boolean>`(${combined} and ${clause})`;
+	}
+	return combined;
+}
+
+// ── Accepting a raw pool/dialect (the "bring the DB you already have" convenience) ───────────────
+
+/** The SQL dialects this adapter targets. mysql/mssql are declared for the object forms but rejected. */
+export type KyselyDatabaseType = "sqlite" | "postgres" | "mysql" | "mssql";
+
+type DB = Record<string, Record<string, unknown>>;
+
+/**
+ * What `kyselyAdapter` accepts: a ready Kysely instance, a raw Kysely `Dialect`, a raw driver (a
+ * better-sqlite3 `Database` or a `pg` `Pool`), or an explicit `{ dialect, type }` / `{ db, type }`.
+ * Raw drivers are duck-typed and wrapped in Kysely — same trick as Better Auth's `dialect.ts`.
+ */
+export type KyselyDatabase =
+	| Kysely<DB>
+	| Dialect
+	| SqliteDatabase
+	| PostgresPool
+	| { dialect: Dialect; type: KyselyDatabaseType }
+	| { db: Kysely<DB>; type: KyselyDatabaseType };
+
+function assertSupported(type: KyselyDatabaseType): void {
+	if (type === "mysql" || type === "mssql") {
+		throw unsupportedOperationError(
+			`@euroclaw/storage-kysely: ${type} isn't supported yet — create()/update() rely on RETURNING. Use sqlite or postgres.`,
+			{ databaseType: type },
+		);
+	}
+}
+
+/**
+ * Normalize any accepted input to a Kysely instance, building the dialect from a raw driver by
+ * duck-typing (a Kysely instance has `selectFrom`; a `Dialect` has `createDriver`; better-sqlite3
+ * has `aggregate`; a `pg`/mysql2 pool has `connect`/`getConnection`). Order matters.
+ */
+function toKysely(database: KyselyDatabase): Kysely<DB> {
+	const probe = database as Record<string, unknown>;
+	// Already a Kysely instance — use it directly.
+	if ("selectFrom" in probe) return database as Kysely<DB>;
+	// Explicit object forms carry their own `type`.
+	if ("db" in probe) {
+		const w = database as { db: Kysely<DB>; type: KyselyDatabaseType };
+		assertSupported(w.type);
+		return w.db;
+	}
+	if ("dialect" in probe) {
+		const w = database as { dialect: Dialect; type: KyselyDatabaseType };
+		assertSupported(w.type);
+		return new Kysely<DB>({ dialect: w.dialect });
+	}
+	// A raw Kysely Dialect.
+	if ("createDriver" in probe)
+		return new Kysely<DB>({ dialect: database as Dialect });
+	// Raw drivers.
+	if ("aggregate" in probe)
+		return new Kysely<DB>({
+			dialect: new SqliteDialect({ database: database as SqliteDatabase }),
+		});
+	if ("connect" in probe)
+		return new Kysely<DB>({
+			dialect: new PostgresDialect({ pool: database as PostgresPool }),
+		});
+	// mysql2 is detectable — fail loudly rather than emit RETURNING it can't run.
+	if ("getConnection" in probe) assertSupported("mysql");
+	throw configurationError(
+		"@euroclaw/storage-kysely: unrecognized `database` — pass a Kysely instance, a Kysely Dialect, a pg Pool, a better-sqlite3 Database, or { dialect, type } / { db, type }.",
+	);
+}
+
+/**
+ * Adapt Kysely — or a raw driver/pool/dialect — to the storage Adapter port. Tables/columns are
+ * addressed by string. SQLite + Postgres today (a mysql2 pool is rejected: create/update use RETURNING).
+ */
+export function kyselyAdapter(database: KyselyDatabase): Adapter {
+	const db = toKysely(database);
+	return {
+		id: "kysely",
+
+		async create({ model, data }) {
+			const row = await db
+				.insertInto(model)
+				.values(data)
+				.returningAll()
+				.executeTakeFirstOrThrow();
+			return row as never;
+		},
+
+		async findOne({ model, where }) {
+			let q = db.selectFrom(model).selectAll();
+			const e = whereExpr(where);
+			if (e !== undefined) q = q.where(e);
+			const row = await q.executeTakeFirst();
+			return (row ?? null) as never;
+		},
+
+		async findMany({ model, where, limit, offset, sortBy }) {
+			let q = db.selectFrom(model).selectAll();
+			const e = whereExpr(where ?? []);
+			if (e !== undefined) q = q.where(e);
+			if (sortBy) q = q.orderBy(sortBy.field, sortBy.direction);
+			if (limit !== undefined) q = q.limit(limit);
+			if (offset) q = q.offset(offset);
+			return (await q.execute()) as never;
+		},
+
+		async count({ model, where }) {
+			let q = db.selectFrom(model).select(sql<number>`count(*)`.as("count"));
+			const e = whereExpr(where ?? []);
+			if (e !== undefined) q = q.where(e);
+			const row = await q.executeTakeFirst();
+			return Number((row as { count: number } | undefined)?.count ?? 0);
+		},
+
+		async update({ model, where, update }) {
+			let q = db.updateTable(model).set(update);
+			const e = whereExpr(where);
+			if (e !== undefined) q = q.where(e);
+			const row = await q.returningAll().executeTakeFirst();
+			return (row ?? null) as never;
+		},
+
+		async updateMany({ model, where, update }) {
+			let q = db.updateTable(model).set(update);
+			const e = whereExpr(where);
+			if (e !== undefined) q = q.where(e);
+			const res = await q.executeTakeFirst();
+			return Number(res?.numUpdatedRows ?? 0);
+		},
+
+		async delete({ model, where }) {
+			let q = db.deleteFrom(model);
+			const e = whereExpr(where);
+			if (e !== undefined) q = q.where(e);
+			await q.execute();
+		},
+
+		async deleteMany({ model, where }) {
+			let q = db.deleteFrom(model);
+			const e = whereExpr(where);
+			if (e !== undefined) q = q.where(e);
+			const res = await q.executeTakeFirst();
+			return Number(res?.numDeletedRows ?? 0);
+		},
+
+		// Atomic single-use: in a transaction, take one matching row then delete it by `id`. The
+		// transaction serializes concurrent callers, so exactly one wins (the rest see no row).
+		async consumeOne({ model, where }) {
+			return db.transaction().execute(async (trx) => {
+				let q = trx.selectFrom(model).selectAll();
+				const e = whereExpr(where);
+				if (e !== undefined) q = q.where(e);
+				const row = await q.limit(1).executeTakeFirst();
+				if (!row) return null;
+				const res = await trx
+					.deleteFrom(model)
+					.where("id", "=", (row as { id: unknown }).id)
+					.executeTakeFirst();
+				return Number(res?.numDeletedRows ?? 0) === 1 ? row : null;
+			}) as never;
+		},
+
+		async transaction(fn) {
+			return db
+				.transaction()
+				.execute((trx) => fn(kyselyAdapter(trx as unknown as Kysely<DB>)));
+		},
+	};
+}

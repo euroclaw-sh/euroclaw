@@ -1,0 +1,28 @@
+{
+	"name": "@euroclaw/storage-core",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "The storage Adapter port + declarative schema format + a zero-dep memory adapter. Port/schema patterns adapted from Better Auth (MIT). ORM adapters implement this port.",
+	"license": "MIT",
+	"author": "Konstantin Ponomarev",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "tsc",
+		"test": "vitest run src",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@euroclaw/errors": "workspace:*"
+	}
+}

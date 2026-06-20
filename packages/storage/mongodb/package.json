@@ -1,0 +1,35 @@
+{
+	"name": "@euroclaw/storage-mongodb",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "MongoDB adapter for the @euroclaw/storage-core Adapter port. Patterns adapted from Better Auth (MIT).",
+	"license": "MIT",
+	"author": "Konstantin Ponomarev",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "tsc",
+		"test": "vitest run src",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@euroclaw/storage-core": "workspace:*"
+	},
+	"peerDependencies": {
+		"mongodb": ">=5.0.0"
+	},
+	"devDependencies": {
+		"mongodb": "6.21.0",
+		"mongodb-memory-server": "10.4.3"
+	}
+}

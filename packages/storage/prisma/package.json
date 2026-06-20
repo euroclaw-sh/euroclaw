@@ -1,0 +1,33 @@
+{
+	"name": "@euroclaw/storage-prisma",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "Prisma adapter for the @euroclaw/storage-core Adapter port — structurally typed, pass your generated PrismaClient. Patterns adapted from Better Auth (MIT).",
+	"license": "MIT",
+	"author": "Konstantin Ponomarev",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "tsc",
+		"test": "vitest run src",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@euroclaw/errors": "workspace:*",
+		"@euroclaw/storage-core": "workspace:*"
+	},
+	"devDependencies": {
+		"@prisma/client": "6.19.3",
+		"prisma": "6.19.3"
+	}
+}

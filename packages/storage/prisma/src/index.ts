@@ -1,0 +1,173 @@
+/**
+ * @euroclaw/storage-prisma — the @euroclaw/storage-core Adapter port over a Prisma client.
+ * Structurally typed (no `@prisma/client` dependency) — pass your generated `PrismaClient`.
+ * `consumeOne` runs find + delete-by-`id` inside one interactive `$transaction`.
+ *
+ * Modeled on Better Auth's Prisma adapter: https://github.com/better-auth/better-auth —
+ * `packages/prisma-adapter`. The where/CRUD translation here is euroclaw's own, written against
+ * Prisma's public delegate API. MIT, © 2024-present Bereket Engida. See THIRD_PARTY_NOTICES.md.
+ */
+
+import { configurationError } from "@euroclaw/errors";
+import type { Adapter, Where } from "@euroclaw/storage-core";
+
+/** The subset of a Prisma model delegate this adapter uses (your generated client satisfies it). */
+export type PrismaDelegate = {
+	create: (args: { data: unknown }) => Promise<unknown>;
+	findFirst: (args: { where?: unknown }) => Promise<unknown>;
+	findMany: (args: {
+		where?: unknown;
+		orderBy?: unknown;
+		take?: number;
+		skip?: number;
+	}) => Promise<unknown[]>;
+	updateMany: (args: {
+		where?: unknown;
+		data: unknown;
+	}) => Promise<{ count: number }>;
+	deleteMany: (args: { where?: unknown }) => Promise<{ count: number }>;
+	count: (args: { where?: unknown }) => Promise<number>;
+};
+
+/** The subset of a Prisma client this adapter uses: interactive transactions + model delegates. */
+export type PrismaLike = {
+	$transaction: <R>(fn: (tx: PrismaLike) => Promise<R>) => Promise<R>;
+};
+
+const PRISMA_OP = {
+	lt: "lt",
+	lte: "lte",
+	gt: "gt",
+	gte: "gte",
+	in: "in",
+} as const;
+
+/** One Where clause → a Prisma where fragment. */
+function clause(w: Where): Record<string, unknown> {
+	const op = w.operator ?? "eq";
+	if (op === "eq") return { [w.field]: w.value };
+	if (op === "ne") return { [w.field]: { not: w.value } };
+	if (op === "contains") return { [w.field]: { contains: w.value } };
+	return { [w.field]: { [PRISMA_OP[op]]: w.value } };
+}
+
+/** Where[] → a Prisma where, left-folded by each clause's connector. */
+export function toWhere(where: Where[]): Record<string, unknown> {
+	let combined: Record<string, unknown> | undefined;
+	for (const w of where) {
+		const c = clause(w);
+		combined =
+			combined === undefined
+				? c
+				: { [w.connector === "OR" ? "OR" : "AND"]: [combined, c] };
+	}
+	return combined ?? {};
+}
+
+function whereAfterUpdate(
+	where: Where[],
+	update: Record<string, unknown>,
+): Where[] {
+	return where.map((clause) =>
+		Object.hasOwn(update, clause.field)
+			? { ...clause, value: update[clause.field] as Where["value"] }
+			: clause,
+	);
+}
+
+const delegate = (p: PrismaLike, name: string): PrismaDelegate => {
+	const d = (p as unknown as Record<string, PrismaDelegate>)[name];
+	if (!d)
+		throw configurationError(
+			`storage-prisma: unknown model "${name}" on the Prisma client`,
+			{ model: name },
+		);
+	return d;
+};
+
+/** Adapt a Prisma client to the storage Adapter port — model names are the client's delegate keys. */
+export function prismaAdapter(prisma: PrismaLike): Adapter {
+	return {
+		id: "prisma",
+
+		async create({ model, data }) {
+			return (await delegate(prisma, model).create({ data })) as never;
+		},
+
+		async findOne({ model, where }) {
+			return ((await delegate(prisma, model).findFirst({
+				where: toWhere(where),
+			})) ?? null) as never;
+		},
+
+		async findMany({ model, where, limit, offset, sortBy }) {
+			return (await delegate(prisma, model).findMany({
+				where: toWhere(where ?? []),
+				orderBy: sortBy ? { [sortBy.field]: sortBy.direction } : undefined,
+				take: limit,
+				skip: offset,
+			})) as never;
+		},
+
+		async count({ model, where }) {
+			return delegate(prisma, model).count({ where: toWhere(where ?? []) });
+		},
+
+		// Prisma's `update`/`delete` require a unique where; the generic Where[] uses updateMany/deleteMany.
+		async update({ model, where, update }) {
+			const d = delegate(prisma, model);
+			const before = await d.findFirst({ where: toWhere(where) });
+			if (!before) return null;
+			const { count } = await d.updateMany({
+				where: toWhere(where),
+				data: update,
+			});
+			if (count < 1) return null;
+			const id = (before as Record<string, unknown>).id;
+			return ((await d.findFirst({
+				where:
+					id === undefined || id === null
+						? toWhere(whereAfterUpdate(where, update))
+						: { id },
+			})) ?? null) as never;
+		},
+
+		async updateMany({ model, where, update }) {
+			return (
+				await delegate(prisma, model).updateMany({
+					where: toWhere(where),
+					data: update,
+				})
+			).count;
+		},
+
+		async delete({ model, where }) {
+			await delegate(prisma, model).deleteMany({ where: toWhere(where) });
+		},
+
+		async deleteMany({ model, where }) {
+			return (
+				await delegate(prisma, model).deleteMany({ where: toWhere(where) })
+			).count;
+		},
+
+		async consumeOne({ model, where }) {
+			return (await prisma.$transaction(async (tx) => {
+				const row = await delegate(tx, model).findFirst({
+					where: toWhere(where),
+				});
+				if (!row) return null;
+				// Only the tx whose delete actually removed the row "wins" — race-safe even if two
+				// transactions both read it before either deletes (the loser sees count 0 → null).
+				const { count } = await delegate(tx, model).deleteMany({
+					where: { id: (row as { id: unknown }).id },
+				});
+				return count === 1 ? row : null;
+			})) as never;
+		},
+
+		async transaction(fn) {
+			return prisma.$transaction((tx) => fn(prismaAdapter(tx)));
+		},
+	};
+}
