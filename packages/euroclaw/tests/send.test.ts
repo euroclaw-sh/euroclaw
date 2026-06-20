@@ -1,0 +1,314 @@
+import { describe, expect, it } from "vitest";
+import { createClaw, govern } from "../src/index";
+import {
+	approvalToolModel,
+	durableRedactor,
+	emailTool,
+	textModel,
+} from "./fixtures";
+
+async function createAgentThread(claw: ReturnType<typeof createClaw>) {
+	const agent = await claw.api.createClaw({
+		id: "claw-1",
+		tenantId: "tenant-1",
+		name: "Recruiting assistant",
+	});
+	const thread = await claw.api.createThread({
+		id: "thread-1",
+		clawId: agent.id,
+		tenantId: agent.tenantId,
+		title: "Candidate Alice",
+	});
+	return { agent, thread };
+}
+
+describe("createClaw send", () => {
+	it("persists user and assistant transcript messages", async () => {
+		const { db, redactor } = durableRedactor();
+		const claw = createClaw({
+			database: db,
+			model: textModel("done"),
+			redactor,
+		});
+		const { agent, thread } = await createAgentThread(claw);
+
+		const sent = await claw.api.sendMessage({
+			clawId: agent.id,
+			message: "hello",
+			runId: "run-1",
+			threadId: thread.id,
+		});
+
+		expect(sent.result).toMatchObject({ status: "completed", text: "done" });
+		expect(sent.userMessage).toMatchObject({ role: "user", sequence: 1 });
+		const messages = await claw.api.listMessages({
+			threadId: thread.id,
+		});
+		expect(messages).toMatchObject([
+			{ content: { text: "hello" }, role: "user", sequence: 1 },
+			{
+				content: { text: "done" },
+				role: "assistant",
+				runId: "run-1",
+				sequence: 2,
+			},
+		]);
+		expect(await claw.api.getThread({ id: thread.id })).toMatchObject({
+			currentMessageId: messages[1]?.id,
+			currentSequence: 2,
+		});
+	});
+
+	it("persists approval waits as checkpoints without assistant messages", async () => {
+		const { db, redactor } = durableRedactor();
+		const claw = createClaw({
+			database: db,
+			model: approvalToolModel(),
+			redactor,
+			tools: {
+				send_email: govern(emailTool({ onExecute: () => ({ sent: true }) }), {
+					gate: () => ({ decision: "needs-approval" }),
+				}),
+			},
+		});
+		const { agent, thread } = await createAgentThread(claw);
+
+		const sent = await claw.api.sendMessage({
+			clawId: agent.id,
+			message: "email alice@personal.com",
+			runId: "run-approval",
+			threadId: thread.id,
+		});
+
+		expect(sent.result.status).toBe("waiting_approval");
+		const messages = await claw.api.listMessages({
+			threadId: thread.id,
+		});
+		expect(messages).toMatchObject([
+			{
+				content: { text: "email alice@personal.com" },
+				role: "user",
+				sequence: 1,
+			},
+		]);
+		const checkpoint = await claw.api.getLatestCheckpoint({
+			runId: "run-approval",
+		});
+		expect(checkpoint).toMatchObject({
+			clawId: agent.id,
+			kind: "approval_wait",
+			state: { approvalIds: expect.any(Array) },
+			threadId: thread.id,
+		});
+		expect(
+			await claw.api.getToolCallByProviderId({
+				runId: "run-approval",
+				toolCallId: "c1",
+			}),
+		).toMatchObject({
+			status: "waiting_approval",
+			toolName: "send_email",
+		});
+	});
+
+	it("records approved resume into the original thread and run", async () => {
+		let toolSaw = "";
+		const { db, redactor } = durableRedactor();
+		const claw = createClaw({
+			database: db,
+			model: approvalToolModel(),
+			redactor,
+			tools: {
+				send_email: govern(
+					emailTool({
+						onExecute: (to) => {
+							toolSaw = to;
+							return { sent: true, to };
+						},
+					}),
+					{ gate: () => ({ decision: "needs-approval" }) },
+				),
+			},
+		});
+		const { agent, thread } = await createAgentThread(claw);
+
+		const sent = await claw.api.sendMessage({
+			clawId: agent.id,
+			message: "email alice@personal.com",
+			runId: "run-resume",
+			threadId: thread.id,
+		});
+		if (sent.result.status !== "waiting_approval") {
+			throw new Error("expected approval wait");
+		}
+		const approvalId = sent.result.approvalIds?.[0];
+		if (!approvalId) throw new Error("missing approval id");
+
+		await claw.api.grantApproval({ approvalId, by: "alice" });
+		const resumed = await claw.api.continueRun({ approvalId });
+
+		expect(resumed).toMatchObject({ status: "completed", text: "done" });
+		expect(toolSaw).toBe("alice@personal.com");
+		const messages = await claw.api.listMessages({
+			threadId: thread.id,
+		});
+		expect(messages.map((message) => message.role)).toEqual([
+			"user",
+			"assistant",
+		]);
+		expect(messages[1]).toMatchObject({
+			content: { text: "done" },
+			runId: "run-resume",
+			sequence: 2,
+		});
+		expect(
+			await claw.api.getToolCallByProviderId({
+				runId: "run-resume",
+				toolCallId: "c1",
+			}),
+		).toMatchObject({ status: "completed" });
+		expect(
+			await claw.api.listToolResults({
+				runId: "run-resume",
+				toolCallId: "c1",
+			}),
+		).toMatchObject([
+			{
+				output: { sent: true, to: expect.stringMatching(/^\{\{pii:/) },
+				status: "completed",
+			},
+		]);
+	});
+
+	it("records denied approvals as failed tool results", async () => {
+		const { db, redactor } = durableRedactor();
+		const claw = createClaw({
+			database: db,
+			model: approvalToolModel(),
+			redactor,
+			tools: {
+				send_email: govern(emailTool({ onExecute: () => ({ sent: true }) }), {
+					gate: () => ({ decision: "needs-approval" }),
+				}),
+			},
+		});
+		const { agent, thread } = await createAgentThread(claw);
+
+		const sent = await claw.api.sendMessage({
+			clawId: agent.id,
+			message: "email alice@personal.com",
+			runId: "run-denied",
+			threadId: thread.id,
+		});
+		if (sent.result.status !== "waiting_approval") {
+			throw new Error("expected approval wait");
+		}
+		const approvalId = sent.result.approvalIds?.[0];
+		if (!approvalId) throw new Error("missing approval id");
+
+		await claw.api.denyApproval({
+			approvalId,
+			by: "alice",
+			reason: "Not allowed",
+		});
+		await expect(claw.api.continueRun({ approvalId })).resolves.toMatchObject({
+			approvalId,
+			decidedBy: "alice",
+			reason: "Not allowed",
+			status: "denied",
+		});
+
+		const messages = await claw.api.listMessages({
+			threadId: thread.id,
+		});
+		expect(messages.map((message) => message.role)).toEqual(["user"]);
+		expect(
+			await claw.api.getToolCallByProviderId({
+				runId: "run-denied",
+				toolCallId: "c1",
+			}),
+		).toMatchObject({ status: "denied" });
+		expect(
+			await claw.api.listToolResults({
+				runId: "run-denied",
+				toolCallId: "c1",
+			}),
+		).toMatchObject([
+			{
+				error: { decidedBy: "alice", reason: "Not allowed" },
+				status: "failed",
+			},
+		]);
+		await claw.api.continueRun({ approvalId });
+		expect(
+			await claw.api.listToolResults({
+				runId: "run-denied",
+				toolCallId: "c1",
+			}),
+		).toHaveLength(1);
+	});
+
+	it("persists completed tool calls and tool results", async () => {
+		let toolSaw = "";
+		const { db, redactor } = durableRedactor();
+		const claw = createClaw({
+			database: db,
+			model: approvalToolModel(),
+			redactor,
+			tools: {
+				send_email: emailTool({
+					onExecute: (to) => {
+						toolSaw = to;
+						return { sent: true, to };
+					},
+				}),
+			},
+		});
+		const { agent, thread } = await createAgentThread(claw);
+
+		const sent = await claw.api.sendMessage({
+			clawId: agent.id,
+			message: "email alice@personal.com",
+			runId: "run-tools",
+			threadId: thread.id,
+		});
+
+		expect(sent.result).toMatchObject({ status: "completed", text: "done" });
+		expect(toolSaw).toBe("alice@personal.com");
+		expect(
+			await claw.api.getToolCallByProviderId({
+				runId: "run-tools",
+				toolCallId: "c1",
+			}),
+		).toMatchObject({
+			args: { to: expect.stringMatching(/^\{\{pii:/) },
+			status: "completed",
+			toolName: "send_email",
+		});
+		const results = await claw.api.listToolResults({
+			runId: "run-tools",
+			toolCallId: "c1",
+		});
+		expect(results).toMatchObject([
+			{
+				output: {
+					sent: true,
+					to: expect.stringMatching(/^\{\{pii:/),
+				},
+				status: "completed",
+			},
+		]);
+	});
+
+	it("requires a ClawsStore", async () => {
+		const claw = createClaw({ model: textModel("done") });
+
+		await expect(
+			claw.api.sendMessage({
+				clawId: "claw-1",
+				message: "hello",
+				threadId: "thread-1",
+			}),
+		).rejects.toThrow(/requires a ClawsStore/);
+	});
+});

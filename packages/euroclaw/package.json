@@ -1,0 +1,37 @@
+{
+	"name": "euroclaw",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "Branded assembly package for euroclaw runtime, governance, and durable engines.",
+	"license": "MIT",
+	"author": "Konstantin Ponomarev",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "tsc",
+		"test": "vitest run tests",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@euroclaw/core": "workspace:*",
+		"@euroclaw/engine-core": "workspace:*",
+		"@euroclaw/engine-sql": "workspace:*",
+		"@euroclaw/runtime": "workspace:*",
+		"@euroclaw/storage-durable": "workspace:*",
+		"arktype": "2.2.0"
+	},
+	"devDependencies": {
+		"@euroclaw/storage-core": "workspace:*",
+		"ai": "5.0.203"
+	}
+}
