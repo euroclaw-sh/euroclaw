@@ -80,18 +80,26 @@ export type ClawSendResult = {
 	userMessage: MessageRecord;
 };
 
+export const clawCronHandlerSecretConfig = ark({
+	"headerName?": "string | undefined",
+	"limit?": "number | undefined",
+	secret: "string",
+});
+export type ClawCronHandlerSecretConfig =
+	typeof clawCronHandlerSecretConfig.infer;
+
+export const clawCronHandlerUnsafeConfig = ark({
+	"headerName?": "string | undefined",
+	"limit?": "number | undefined",
+	unsafeAllowUnauthenticated: "true",
+});
+export type ClawCronHandlerUnsafeConfig =
+	typeof clawCronHandlerUnsafeConfig.infer;
+
 export type ClawCronHandlerConfig =
 	| false
-	| {
-			headerName?: string;
-			limit?: number;
-			secret: string;
-	  }
-	| {
-			headerName?: string;
-			limit?: number;
-			unsafeAllowUnauthenticated: true;
-	  };
+	| ClawCronHandlerSecretConfig
+	| ClawCronHandlerUnsafeConfig;
 
 export type ClawContext<Config extends RuntimeConfig = RuntimeConfig> = {
 	readonly runtime: Runtime<Config>;

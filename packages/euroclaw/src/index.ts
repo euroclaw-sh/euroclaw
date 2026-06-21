@@ -20,10 +20,13 @@ import {
 	resolveDatabase,
 } from "@euroclaw/runtime";
 import { createClawsStore } from "@euroclaw/storage-durable";
+import { type as ark } from "arktype";
 import {
 	type ClawApi,
 	type ClawContext,
 	type ClawCronHandlerConfig,
+	clawCronHandlerSecretConfig,
+	clawCronHandlerUnsafeConfig,
 	createClawApi,
 } from "./api";
 import { createClawRuntimeEventSink } from "./events";
@@ -40,6 +43,8 @@ export type {
 	ClawApiRouteDefinition,
 	ClawContext,
 	ClawCronHandlerConfig,
+	ClawCronHandlerSecretConfig,
+	ClawCronHandlerUnsafeConfig,
 	ClawSendInput,
 	ClawSendResult,
 } from "./api";
@@ -47,6 +52,8 @@ export {
 	clawApiInputSchemas,
 	clawApiRouteList,
 	clawApiRoutes,
+	clawCronHandlerSecretConfig,
+	clawCronHandlerUnsafeConfig,
 	parseClawApiInput,
 } from "./api";
 
@@ -170,8 +177,10 @@ function assertCronHandler(input: {
 		);
 	}
 	if (input.cronHandler === false) return;
-	if ("unsafeAllowUnauthenticated" in input.cronHandler) return;
-	if (!input.cronHandler.secret) {
+	const unsafe = clawCronHandlerUnsafeConfig(input.cronHandler);
+	if (!(unsafe instanceof ark.errors)) return;
+	const secret = clawCronHandlerSecretConfig(input.cronHandler);
+	if (secret instanceof ark.errors || secret.secret.length === 0) {
 		throw configurationError(
 			"createClaw cronHandler.secret must be a non-empty string",
 		);
