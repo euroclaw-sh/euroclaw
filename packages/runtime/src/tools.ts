@@ -11,6 +11,7 @@ export type RunState = {
 	currentStep: number;
 	currentApprovalWaitId?: string;
 	currentEffectId?: string;
+	runInstanceId?: string;
 	currentModelRunner?: () => unknown | Promise<unknown>;
 	recording?: RuntimeRecordingContext;
 	abortSignal?: RuntimeAbortSignal;

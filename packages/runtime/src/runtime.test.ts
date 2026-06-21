@@ -7,7 +7,10 @@ import {
 	type PiiSpan,
 } from "@euroclaw/core";
 import { memoryAdapter } from "@euroclaw/storage-core";
-import { createPiiMappingStore } from "@euroclaw/storage-durable";
+import {
+	createEffectStore,
+	createPiiMappingStore,
+} from "@euroclaw/storage-durable";
 import { jsonSchema, tool, type wrapLanguageModel } from "ai";
 import { describe, expect, it } from "vitest";
 import {
@@ -229,6 +232,42 @@ describe("@euroclaw/runtime", () => {
 
 		await expect(runtime.run("hello")).rejects.toThrow(
 			/event sink unavailable/,
+		);
+	});
+
+	it("redacts tool error payloads before persistence", async () => {
+		const events: RuntimeEvent[] = [];
+		const db = memoryAdapter();
+		const runtime = createRuntime({
+			model: scriptedModel({ prompt: "" }),
+			audit: createMemoryAudit(),
+			database: db,
+			events: { emit: (event) => events.push(event) },
+			redactor: createStoredRedactor({
+				detector: emailDetector,
+				mappings: createPiiMappingStore(db),
+			}),
+			tools: {
+				send_email: tool({
+					description: "Send an email.",
+					inputSchema: jsonSchema<{ to: string }>({
+						type: "object",
+						properties: { to: { type: "string" } },
+						required: ["to"],
+					}),
+					execute: async ({ to }) => {
+						throw new Error(`cannot email ${to}`);
+					},
+				}),
+			},
+		});
+
+		await expect(runtime.run("email alice@personal.com")).rejects.toThrow(
+			/cannot email alice@personal.com/,
+		);
+		expect(JSON.stringify(events)).not.toContain("alice@personal.com");
+		expect(JSON.stringify(runtime.audit?.entries() ?? [])).not.toContain(
+			"alice@personal.com",
 		);
 	});
 
@@ -683,6 +722,33 @@ describe("@euroclaw/runtime", () => {
 		expect(effect?.output).toMatchObject({ sent: true });
 		expect(JSON.stringify(effect?.output)).toMatch(/\{\{pii:[a-z0-9]+\}\}/);
 		expect(JSON.stringify(effect?.output)).not.toContain("alice@personal.com");
+	});
+
+	it("fails closed when redacted effect output has no redactor", async () => {
+		let toolRuns = 0;
+		const runtime = createRuntime({
+			model: scriptedModel({ prompt: "" }),
+			effectStore: createEffectStore(memoryAdapter()),
+			tools: {
+				send_email: tool({
+					description: "Send an email.",
+					inputSchema: jsonSchema<{ to: string }>({
+						type: "object",
+						properties: { to: { type: "string" } },
+						required: ["to"],
+					}),
+					execute: async () => {
+						toolRuns++;
+						return { sent: true };
+					},
+				}),
+			},
+		});
+
+		await expect(runtime.run("email alice@personal.com")).rejects.toThrow(
+			/redacted effect output requires a redactor/,
+		);
+		expect(toolRuns).toBe(0);
 	});
 
 	it("persists full effect output only when requested", async () => {

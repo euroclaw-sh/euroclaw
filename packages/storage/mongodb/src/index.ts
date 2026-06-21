@@ -29,6 +29,10 @@ function assertFieldName(field: string): void {
 	}
 }
 
+function assertUpdateKeys(update: Record<string, unknown>): void {
+	for (const key of Object.keys(update)) assertFieldName(key);
+}
+
 /** One Where clause → a Mongo filter fragment. */
 function clause(w: Where): Filter<Document> {
 	assertFieldName(w.field);
@@ -92,6 +96,7 @@ export function mongoAdapter(db: Db): Adapter {
 		},
 
 		async update({ model, where, update }) {
+			assertUpdateKeys(update);
 			const doc = await col(model).findOneAndUpdate(
 				toFilter(where),
 				{ $set: update },
@@ -101,6 +106,7 @@ export function mongoAdapter(db: Db): Adapter {
 		},
 
 		async updateMany({ model, where, update }) {
+			assertUpdateKeys(update);
 			const r = await col(model).updateMany(toFilter(where), { $set: update });
 			return r.modifiedCount;
 		},

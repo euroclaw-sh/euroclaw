@@ -329,20 +329,15 @@ export function drizzleAdapter(
 			const t = table(model);
 			const clause = whereClause(t, where);
 			const idCol = idColumn(t);
+			const idClause = (id: unknown) =>
+				and(clause, eq(idCol as Parameters<typeof eq>[0], id));
 			const result =
 				provider === "sqlite"
 					? database.transaction((tx) => {
 							const row = oneSync(tx.select().from(t).where(clause).limit(1));
 							if (!row) return null;
 							const deleted = runSync(
-								tx
-									.delete(t)
-									.where(
-										eq(
-											idCol as Parameters<typeof eq>[0],
-											(row as { id: unknown }).id,
-										),
-									),
+								tx.delete(t).where(idClause((row as { id: unknown }).id)),
 							);
 							if (affectedRows(deleted) !== 1) return null;
 							return row;
@@ -355,14 +350,7 @@ export function drizzleAdapter(
 							if (!row) return null;
 							if (provider === "mysql") {
 								const deleted = await run(
-									tx
-										.delete(t)
-										.where(
-											eq(
-												idCol as Parameters<typeof eq>[0],
-												(row as { id: unknown }).id,
-											),
-										),
+									tx.delete(t).where(idClause((row as { id: unknown }).id)),
 									provider,
 								);
 								return affectedRows(deleted) === 1 ? row : null;
@@ -370,12 +358,7 @@ export function drizzleAdapter(
 							const deleted = await one(
 								tx
 									.delete(t)
-									.where(
-										eq(
-											idCol as Parameters<typeof eq>[0],
-											(row as { id: unknown }).id,
-										),
-									)
+									.where(idClause((row as { id: unknown }).id))
 									.returning(),
 								provider,
 							);

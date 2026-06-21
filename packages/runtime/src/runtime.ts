@@ -168,6 +168,17 @@ function errorPayload(err: unknown): Record<string, unknown> {
 		: { message: String(err) };
 }
 
+async function redactedErrorPayload(input: {
+	err: unknown;
+	redactor?: Redactor;
+	ctx: Record<string, unknown>;
+}): Promise<Record<string, unknown>> {
+	const payload = errorPayload(input.err);
+	return input.redactor
+		? input.redactor.redactValue(payload, redactionContextFrom(input.ctx))
+		: payload;
+}
+
 function toJsonValue(value: unknown, label: string): JsonValue {
 	let parsed: unknown;
 	try {
@@ -423,7 +434,13 @@ export function createRuntime<const Config extends RuntimeConfig>(
 				).euroclaw?.effect;
 				const outputMode = effectOutputMode(effectPolicy);
 				if (!effectStore) return execute(state.abortSignal);
-				state.currentEffectId ??= `run:${state.recording?.runId ?? state.currentApprovalWaitId ?? newId("run")}:tool:${state.currentToolCallId || call.name}`;
+				if (outputMode === "redacted" && !config.redactor) {
+					throw configurationError(
+						"redacted effect output requires a redactor",
+						{ toolName: call.name },
+					);
+				}
+				state.currentEffectId ??= `run:${state.recording?.runId ?? state.runInstanceId ?? newId("run")}:tool:${state.currentToolCallId || call.name}`;
 				const inputHash = hashEffectInput({
 					toolName: call.name,
 					args: call.args,
@@ -519,7 +536,11 @@ export function createRuntime<const Config extends RuntimeConfig>(
 						await effectStore.fail({
 							id: state.currentEffectId,
 							leaseToken: claim.leaseToken,
-							error: errorPayload(err),
+							error: await redactedErrorPayload({
+								err,
+								redactor: config.redactor,
+								ctx: _ctx,
+							}),
 							now: now(),
 						});
 					} catch {
@@ -548,6 +569,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		options?: RuntimeRunOptions,
 	): Promise<RuntimeResult> => {
 		const state = createRunState();
+		state.runInstanceId = newId("runstate");
 		state.abortSignal = options?.abortSignal;
 		abortIfNeeded(options?.abortSignal);
 		const recording = options?.[RUNTIME_RECORDING_OPTION];
@@ -649,6 +671,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		const resolvedCtx = await resolveRunContext(ctx);
 
 		const state = createRunState();
+		state.runInstanceId = `approval:${id}`;
 		state.abortSignal = options?.abortSignal;
 		state.recording = effectiveRecording;
 		state.currentToolCallId = checkpoint.toolCallId;
@@ -719,6 +742,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		];
 
 		const resumeState = createRunState();
+		resumeState.runInstanceId = `${state.runInstanceId}:resume`;
 		resumeState.abortSignal = options?.abortSignal;
 		resumeState.recording = effectiveRecording;
 		const result = await runAiSdkLoop({

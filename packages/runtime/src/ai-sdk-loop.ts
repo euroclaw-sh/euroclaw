@@ -128,7 +128,7 @@ export async function runAiSdkLoop(
 			input.state.currentToolInput = redactedToolInput;
 			input.state.currentStep = step;
 			input.state.currentEffectId = undefined;
-			input.state.currentApprovalWaitId = `${input.now()}:${toolCall.toolCallId}`;
+			input.state.currentApprovalWaitId = `${input.state.runInstanceId ?? input.now()}:${step}:${toolCall.toolCallId}`;
 			const pendingBefore = new Set(
 				(await input.core.approvals?.list({ status: "pending" }))?.map(
 					(approval) => approval.id,
@@ -148,11 +148,15 @@ export async function runAiSdkLoop(
 					input.ctx,
 				);
 			} catch (err) {
+				const error =
+					err instanceof Error
+						? { name: err.name, message: err.message }
+						: { message: String(err) };
+				const redactedError = input.redactEventValue
+					? await input.redactEventValue(error)
+					: error;
 				await input.emitEvent?.({
-					error:
-						err instanceof Error
-							? { name: err.name, message: err.message }
-							: { message: String(err) },
+					error: redactedError,
 					step,
 					toolCallId: toolCall.toolCallId,
 					toolName: toolCall.toolName,

@@ -64,6 +64,12 @@ export function toWhere(where: Where[]): Record<string, unknown> {
 	return combined ?? {};
 }
 
+function andWhere(
+	...clauses: Record<string, unknown>[]
+): Record<string, unknown> {
+	return { AND: clauses };
+}
+
 const delegate = (p: PrismaLike, name: string): PrismaDelegate => {
 	const d = (p as unknown as Record<string, PrismaDelegate>)[name];
 	if (!d)
@@ -111,8 +117,9 @@ export function prismaAdapter(prisma: PrismaLike): Adapter {
 			if (!before) return null;
 			const id = before.id;
 			if (id === undefined || id === null) return null;
+			const conditionalWhere = andWhere({ id }, toWhere(where));
 			const { count } = await d.updateMany({
-				where: { id },
+				where: conditionalWhere,
 				data: update,
 			});
 			if (count < 1) return null;
@@ -137,7 +144,7 @@ export function prismaAdapter(prisma: PrismaLike): Adapter {
 			});
 			const id = before?.id;
 			if (id === undefined || id === null) return;
-			await d.deleteMany({ where: { id } });
+			await d.deleteMany({ where: andWhere({ id }, toWhere(where)) });
 		},
 
 		async deleteMany({ model, where }) {
@@ -159,7 +166,7 @@ export function prismaAdapter(prisma: PrismaLike): Adapter {
 				// Only the tx whose delete actually removed the row "wins" — race-safe even if two
 				// transactions both read it before either deletes (the loser sees count 0 → null).
 				const { count } = await delegate(tx, model).deleteMany({
-					where: { id },
+					where: andWhere({ id }, toWhere(where)),
 				});
 				return count === 1 ? row : null;
 			})) as never;

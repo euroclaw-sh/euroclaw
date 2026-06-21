@@ -147,6 +147,26 @@ describe("@euroclaw/storage-mongodb — adapter against real MongoDB", () => {
 		expect(await a.count({ model: "approval" })).toBe(1);
 	});
 
+	it("rejects Mongo operator update keys", async () => {
+		const a = mongoAdapter(db);
+		await a.create({ model: "approval", data: { id: "x", status: "pending" } });
+
+		await expect(
+			a.update({
+				model: "approval",
+				where: [{ field: "id", value: "x" }],
+				update: { $where: "true" },
+			}),
+		).rejects.toThrow(/invalid field name/);
+		await expect(
+			a.updateMany({
+				model: "approval",
+				where: [{ field: "id", value: "x" }],
+				update: { "profile.name": "alice" },
+			}),
+		).rejects.toThrow(/invalid field name/);
+	});
+
 	it("consumeOne is single-use and race-safe (native atomic findOneAndDelete)", async () => {
 		const a = mongoAdapter(db);
 		await a.create({ model: "token", data: { id: "t1", digest: "abc" } });

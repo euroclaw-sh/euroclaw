@@ -236,10 +236,11 @@ export function kyselyAdapter(database: KyselyDatabase): Adapter {
 				if (e !== undefined) q = q.where(e);
 				const row = await q.limit(1).executeTakeFirst();
 				if (!row) return null;
-				const res = await trx
+				let deleteQuery = trx
 					.deleteFrom(model)
-					.where("id", "=", (row as { id: unknown }).id)
-					.executeTakeFirst();
+					.where("id", "=", (row as { id: unknown }).id);
+				if (e !== undefined) deleteQuery = deleteQuery.where(e);
+				const res = await deleteQuery.executeTakeFirst();
 				return Number(res?.numDeletedRows ?? 0) === 1 ? row : null;
 			}) as never;
 		},

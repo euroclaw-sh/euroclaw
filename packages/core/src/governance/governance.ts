@@ -360,9 +360,12 @@ export function createGovernance<const Config extends GovernanceConfig>(
 			outcome = { status: "ok", output };
 			return outcome;
 		} catch (err) {
+			const rawReason = err instanceof Error ? err.message : String(err);
 			outcome ??= {
 				status: "error",
-				reason: err instanceof Error ? err.message : String(err),
+				reason: redactionOn
+					? await redactor.redactValue(rawReason, redactionContextFrom(ctx))
+					: rawReason,
 			};
 			throw err;
 		} finally {
@@ -437,9 +440,12 @@ export function createGovernance<const Config extends GovernanceConfig>(
 				outcome = { status: "ok", output };
 				return outcome;
 			} catch (err) {
+				const rawReason = err instanceof Error ? err.message : String(err);
 				outcome ??= {
 					status: "error",
-					reason: err instanceof Error ? err.message : String(err),
+					reason: redactionOn
+						? await redactor.redactValue(rawReason, redactionContextFrom(ctx))
+						: rawReason,
 				};
 				throw err;
 			} finally {

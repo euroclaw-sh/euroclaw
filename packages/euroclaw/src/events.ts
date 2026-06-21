@@ -63,15 +63,21 @@ export function createClawRuntimeEventSink(
 						status: "completed",
 					});
 				}
-				await store.toolResults.create({
-					clawId: recording.clawId,
-					output: event.output,
-					outputMode: "redacted",
+				const existingResults = await store.toolResults.listForToolCall({
 					runId: event.runId,
-					status: "completed",
-					threadId: recording.threadId,
 					toolCallId: event.toolCallId,
 				});
+				if (!existingResults.some((result) => result.status === "completed")) {
+					await store.toolResults.create({
+						clawId: recording.clawId,
+						output: event.output,
+						outputMode: "redacted",
+						runId: event.runId,
+						status: "completed",
+						threadId: recording.threadId,
+						toolCallId: event.toolCallId,
+					});
+				}
 				return;
 			}
 
@@ -115,19 +121,41 @@ export function createClawRuntimeEventSink(
 				});
 				if (call)
 					await store.toolCalls.updateStatus(call.id, { status: "failed" });
-				await store.toolResults.create({
-					clawId: recording.clawId,
-					error: event.error,
-					outputMode: "redacted",
+				const existingResults = await store.toolResults.listForToolCall({
 					runId: event.runId,
-					status: "failed",
-					threadId: recording.threadId,
 					toolCallId: event.toolCallId,
 				});
+				if (existingResults.length === 0) {
+					await store.toolResults.create({
+						clawId: recording.clawId,
+						error: event.error,
+						outputMode: "redacted",
+						runId: event.runId,
+						status: "failed",
+						threadId: recording.threadId,
+						toolCallId: event.toolCallId,
+					});
+				}
 				return;
 			}
 
 			if (event.type === "run.completed") {
+				if (event.runId) {
+					const existing = await store.messages.listForThread({
+						threadId: recording.threadId,
+					});
+					const textContent = { text: event.text };
+					if (
+						existing.some(
+							(message) =>
+								message.role === "assistant" &&
+								message.runId === event.runId &&
+								JSON.stringify(message.content) === JSON.stringify(textContent),
+						)
+					) {
+						return;
+					}
+				}
 				await store.messages.append({
 					clawId: recording.clawId,
 					content: { text: event.text },
