@@ -33,6 +33,11 @@ import type { ModelMessage, ToolSet, wrapLanguageModel } from "ai";
 import { type as ark } from "arktype";
 import { runAiSdkLoop, toolResultMessage } from "./ai-sdk-loop";
 import {
+	createToolCatalog,
+	type ToolCatalog,
+	toolEntriesFromToolSet,
+} from "./catalog";
+import {
 	composeContext,
 	type IdentityResolver,
 	type MembershipResolver,
@@ -141,6 +146,10 @@ export type Runtime<Config extends RuntimeConfig = RuntimeConfig> = {
 	readonly audit?: AuditSink;
 	readonly approvals?: ApprovalStore;
 	readonly effects?: EffectStore;
+	/** The tool catalog read-path over this runtime's registered tools:
+	 *  traversable tree (list), scoped search, and describe. Visibility only —
+	 *  calling a tool still routes through the governance chokepoint. */
+	readonly catalog: ToolCatalog;
 };
 
 export function runtimeRunOptionsWithRecording(
@@ -343,6 +352,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		tenant: config.tenant,
 	});
 	const modelTools = modelFacingTools(tools);
+	const catalog = createToolCatalog(toolEntriesFromToolSet(tools));
 	const emitEvent = (
 		recording: RuntimeRecordingContext | undefined,
 		payload: RuntimeEventPayloadInput,
@@ -794,6 +804,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 	return {
 		audit: config.audit,
 		approvals: approvalStore,
+		catalog,
 		continueRun,
 		effects: effectStore,
 		run,

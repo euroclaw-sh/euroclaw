@@ -1,5 +1,6 @@
 export type { ToolGovernance } from "@euroclaw/core";
 export { govern } from "@euroclaw/core";
+export * from "./catalog";
 export * from "./context";
 export type { RuntimeDatabase } from "./database";
 export { resolveDatabase } from "./database";
