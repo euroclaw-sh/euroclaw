@@ -4,7 +4,7 @@ import {
 	type EffectStore,
 	effectRecord as effectRecordSchema,
 	jsonValue as jsonValueSchema,
-} from "@euroclaw/core";
+} from "@euroclaw/contracts";
 import { errorMessage, stateError, validationError } from "@euroclaw/errors";
 import type { Adapter } from "@euroclaw/storage-core";
 import { sha256 } from "@noble/hashes/sha2.js";

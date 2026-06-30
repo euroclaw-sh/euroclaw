@@ -2,7 +2,7 @@
 	"name": "@euroclaw/core",
 	"version": "0.0.0",
 	"type": "module",
-	"description": "Core product contracts and governance primitives for euroclaw.",
+	"description": "The euroclaw governance & privacy kernel: the redactor, hash-chained audit, approval gate, and createGovernance — the non-bypassable pipeline. Re-exports @euroclaw/contracts.",
 	"license": "MIT",
 	"author": "Konstantin Ponomarev",
 	"homepage": "https://github.com/euroclaw-sh/euroclaw#readme",
@@ -31,10 +31,11 @@
 	],
 	"scripts": {
 		"build": "rm -rf dist && tsc",
-		"test": "vitest run src",
+		"test": "vitest run tests",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@euroclaw/contracts": "workspace:*",
 		"@euroclaw/errors": "workspace:*",
 		"@noble/hashes": "2.2.0",
 		"arktype": "2.2.0"

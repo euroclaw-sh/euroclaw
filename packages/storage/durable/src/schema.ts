@@ -9,7 +9,7 @@ import {
 	entity,
 	field,
 	piiMappingSchema,
-} from "@euroclaw/core";
+} from "@euroclaw/contracts";
 import type { SchemaDeclaration } from "@euroclaw/storage-core";
 
 const teamMemberEntity = entity("team_member", {

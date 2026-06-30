@@ -9,7 +9,7 @@ import {
 	TEAM_CONTEXT_KEY,
 	TENANT_CONTEXT_KEY,
 	type TurnContext,
-} from "@euroclaw/core";
+} from "@euroclaw/contracts";
 
 /** Resolves the accountable operator → the `actor` (or undefined). `() => "system:cron"` for background runs. */
 export type IdentityResolver = (

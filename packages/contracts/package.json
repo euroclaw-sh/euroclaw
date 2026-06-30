@@ -1,0 +1,41 @@
+{
+	"name": "@euroclaw/contracts",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "The euroclaw protocol: governance boundary + plugin contracts, the entity schema DSL, and the port/schema definitions every euroclaw package speaks. Near-zero deps.",
+	"license": "MIT",
+	"author": "Konstantin Ponomarev",
+	"homepage": "https://github.com/euroclaw-sh/euroclaw#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/euroclaw-sh/euroclaw.git",
+		"directory": "packages/contracts"
+	},
+	"bugs": {
+		"url": "https://github.com/euroclaw-sh/euroclaw/issues"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "rm -rf dist && tsc",
+		"test": "vitest run tests",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@euroclaw/errors": "workspace:*",
+		"arktype": "2.2.0"
+	}
+}

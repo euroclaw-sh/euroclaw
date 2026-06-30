@@ -1,4 +1,5 @@
-import type { Governance, ToolGovernance } from "@euroclaw/core";
+import type { ToolGovernance } from "@euroclaw/contracts";
+import type { Governance } from "@euroclaw/core";
 import type { ModelMessage, ToolSet } from "ai";
 import type { RuntimeRecordingContext } from "./events";
 import type { RuntimeAbortSignal } from "./runtime";

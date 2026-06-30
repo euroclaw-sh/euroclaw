@@ -19,7 +19,7 @@
 	],
 	"scripts": {
 		"build": "rm -rf dist && tsc",
-		"test": "vitest run src",
+		"test": "vitest run tests",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {

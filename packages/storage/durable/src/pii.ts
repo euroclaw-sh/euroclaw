@@ -2,7 +2,7 @@ import {
 	type PiiMapping,
 	type PiiMappingStore,
 	piiMapping as piiMappingSchema,
-} from "@euroclaw/core";
+} from "@euroclaw/contracts";
 import { validationError } from "@euroclaw/errors";
 import type { Adapter, Where } from "@euroclaw/storage-core";
 import { type } from "arktype";

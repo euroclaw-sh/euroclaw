@@ -10,7 +10,7 @@ import {
 	jsonObject,
 	type NewApproval,
 	newApproval as newApprovalSchema,
-} from "@euroclaw/core";
+} from "@euroclaw/contracts";
 import { errorMessage, validationError } from "@euroclaw/errors";
 import type { Adapter, Where } from "@euroclaw/storage-core";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils.js";

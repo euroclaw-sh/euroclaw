@@ -19,13 +19,16 @@
 	],
 	"scripts": {
 		"build": "rm -rf dist && tsc",
-		"test": "vitest run src",
+		"test": "vitest run tests",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"@cedar-policy/cedar-wasm": "4.11.1",
-		"@euroclaw/core": "workspace:*",
+		"@euroclaw/contracts": "workspace:*",
 		"@euroclaw/errors": "workspace:*",
 		"@euroclaw/policy-core": "workspace:*"
+	},
+	"devDependencies": {
+		"@euroclaw/core": "workspace:*"
 	}
 }

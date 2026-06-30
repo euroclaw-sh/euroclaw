@@ -8,16 +8,16 @@ import type {
 	JsonValue,
 	Redactor,
 	ToolEffectPolicy,
-} from "@euroclaw/core";
+} from "@euroclaw/contracts";
 import {
 	CLAW_ID_CONTEXT_KEY,
-	createGovernance,
 	jsonValue as jsonValueSchema,
 	RESERVED_CONTEXT_PREFIX,
 	RUN_ID_CONTEXT_KEY,
 	redactionContextFrom,
 	THREAD_ID_CONTEXT_KEY,
-} from "@euroclaw/core";
+} from "@euroclaw/contracts";
+import { createGovernance } from "@euroclaw/core";
 import {
 	configurationError,
 	stateError,

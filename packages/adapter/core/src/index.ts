@@ -4,7 +4,7 @@ import type {
 	EuroclawPlugin,
 	EuroclawRoute,
 	EuroclawRouteRequest,
-} from "@euroclaw/core";
+} from "@euroclaw/contracts";
 import {
 	configurationError,
 	EuroclawError,
@@ -162,7 +162,10 @@ function apiRoutes(): ResolvedRoute[] {
 				if (typeof fn !== "function") {
 					return {
 						status: 404,
-						body: { ok: false, error: { message: `unknown api method: ${name}` } },
+						body: {
+							ok: false,
+							error: { message: `unknown api method: ${name}` },
+						},
 					};
 				}
 				const input = parseClawApiInput(name, await readInput(request, method));

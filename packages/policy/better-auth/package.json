@@ -19,12 +19,15 @@
 	],
 	"scripts": {
 		"build": "rm -rf dist && tsc",
-		"test": "vitest run src",
+		"test": "vitest run tests",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@euroclaw/core": "workspace:*",
+		"@euroclaw/contracts": "workspace:*",
 		"@euroclaw/policy-core": "workspace:*",
 		"better-auth": "1.6.19"
+	},
+	"devDependencies": {
+		"@euroclaw/core": "workspace:*"
 	}
 }

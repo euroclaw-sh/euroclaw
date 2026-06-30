@@ -14,7 +14,7 @@ import type {
 	GateDecision,
 	ToolCall,
 	TurnContext,
-} from "@euroclaw/core";
+} from "@euroclaw/contracts";
 import { validationError } from "@euroclaw/errors";
 import { type } from "arktype";
 

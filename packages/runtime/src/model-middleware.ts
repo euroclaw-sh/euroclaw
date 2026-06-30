@@ -1,5 +1,6 @@
-import type { Governance, JsonObject } from "@euroclaw/core";
-import { redactionContextFrom } from "@euroclaw/core";
+import type { JsonObject } from "@euroclaw/contracts";
+import { redactionContextFrom } from "@euroclaw/contracts";
+import type { Governance } from "@euroclaw/core";
 import { stateError } from "@euroclaw/errors";
 import type { LanguageModelMiddleware } from "ai";
 import type { RuntimeModel } from "./runtime";

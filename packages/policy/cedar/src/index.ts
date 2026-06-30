@@ -27,7 +27,7 @@ import {
 	ROLE_CONTEXT_KEY,
 	TEAM_CONTEXT_KEY,
 	type ToolCall,
-} from "@euroclaw/core";
+} from "@euroclaw/contracts";
 import { configurationError, validationError } from "@euroclaw/errors";
 import {
 	createPolicyPlugin,

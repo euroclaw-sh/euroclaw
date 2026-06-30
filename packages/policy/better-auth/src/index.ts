@@ -11,7 +11,7 @@
 // The `auth` param is typed structurally (just `api.hasPermission`), so a real auth WITH the
 // organization plugin satisfies it, an auth WITHOUT it fails to compile, and a test stub needs no DB.
 
-import type { ToolCall } from "@euroclaw/core";
+import type { ToolCall } from "@euroclaw/contracts";
 import {
 	createPolicyPlugin,
 	type PolicyEngine,

@@ -2,7 +2,7 @@
 	"name": "@euroclaw/storage-durable",
 	"version": "0.0.0",
 	"type": "module",
-	"description": "SQL-backed durable stores (ApprovalStore) over the @euroclaw/storage-core Adapter port — the bridge between @euroclaw/core's ports and any storage adapter.",
+	"description": "SQL-backed durable stores (ApprovalStore) over the @euroclaw/storage-core Adapter port — the bridge between @euroclaw/contracts' ports and any storage adapter.",
 	"license": "MIT",
 	"author": "Konstantin Ponomarev",
 	"exports": {
@@ -19,11 +19,11 @@
 	],
 	"scripts": {
 		"build": "rm -rf dist && tsc",
-		"test": "vitest run src",
+		"test": "vitest run tests",
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@euroclaw/core": "workspace:*",
+		"@euroclaw/contracts": "workspace:*",
 		"@euroclaw/errors": "workspace:*",
 		"@euroclaw/storage-core": "workspace:*",
 		"@noble/hashes": "2.2.0",

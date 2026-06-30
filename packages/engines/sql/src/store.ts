@@ -12,7 +12,7 @@
  * produced here is operational state, not compliance audit; compliance evidence stays in @euroclaw/core.
  */
 
-import { jsonObject as jsonObjectSchema } from "@euroclaw/core";
+import { jsonObject as jsonObjectSchema } from "@euroclaw/contracts";
 import {
 	configurationError,
 	errorMessage,

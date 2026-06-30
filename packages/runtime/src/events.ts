@@ -1,4 +1,9 @@
-import { jsonObject, jsonValue, RESERVED_CONTEXT_PREFIX } from "@euroclaw/core";
+import {
+	type EventSink,
+	jsonObject,
+	jsonValue,
+	RESERVED_CONTEXT_PREFIX,
+} from "@euroclaw/contracts";
 import { validationError } from "@euroclaw/errors";
 import { type as ark } from "arktype";
 
@@ -132,9 +137,9 @@ export type RuntimeEventPayloadInput = { type: RuntimeEvent["type"] } & Record<
 	unknown
 >;
 
-export type RuntimeEventSink = {
-	emit: (event: RuntimeEvent) => void | Promise<void>;
-};
+// The runtime's event sink is the core `EventSink` port specialised to the concrete RuntimeEvent
+// union — `RuntimeEvent` carries `type: string`, so it satisfies the base `event` shape core owns.
+export type RuntimeEventSink = EventSink<RuntimeEvent>;
 
 export function createRuntimeEvent(input: {
 	createdAt: string;
@@ -175,6 +180,22 @@ export function runtimeRecordingContextFrom(
 		throw validationError("runtime recording context invalid", valid.summary);
 	}
 	return valid;
+}
+
+/**
+ * Adapt the runtime's operational event sinks to the neutral `EventSink` port handed to plugins
+ * via `EuroclawPluginConfigureContext.events`. Plugin-emitted events share the runtime's single
+ * operational stream; each sink reads `type` and ignores events it doesn't recognise (e.g. the
+ * durable sink early-returns), so a plugin event simply lands wherever a sink knows what to do
+ * with it. The cast is the documented seam: plugin events are base `event`s today and become part
+ * of the `RuntimeEvent` union as concrete schemas (skill.*, channel.*) are added in later tasks.
+ */
+export function pluginEventSink(sinks: readonly RuntimeEventSink[]): EventSink {
+	return {
+		async emit(event) {
+			for (const sink of sinks) await sink.emit(event as RuntimeEvent);
+		},
+	};
 }
 
 export async function emitRuntimeEvent(

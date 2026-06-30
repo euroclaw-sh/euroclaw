@@ -2,7 +2,7 @@ import type {
 	EuroclawCronFlag,
 	EuroclawPlugin,
 	JsonObject,
-} from "@euroclaw/core";
+} from "@euroclaw/contracts";
 import { configurationError } from "@euroclaw/errors";
 
 export type EngineRunHandle = {

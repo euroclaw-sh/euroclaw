@@ -38,7 +38,7 @@ import {
 	type UpdateChannelEndpointByKeyInput,
 	type UpdateChannelEndpointInput,
 	updateChannelEndpointInput,
-} from "@euroclaw/core";
+} from "@euroclaw/contracts";
 import {
 	configurationError,
 	stateError,

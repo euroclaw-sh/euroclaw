@@ -4,7 +4,7 @@
  * licensed under the MIT License. See THIRD_PARTY_NOTICES.md.
  */
 
-import { entity, field } from "@euroclaw/core";
+import { entity, field } from "@euroclaw/contracts";
 import type { SchemaDeclaration } from "@euroclaw/storage-core";
 
 const runStatusValues = [
