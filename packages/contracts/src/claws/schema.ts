@@ -185,8 +185,15 @@ export const conversationBindingFields = {
 	id: field.string({ required: true, unique: true }),
 	provider: field.string({ required: true, index: true }),
 	tenantId: field.string({ required: true, index: true }),
-	externalConversationId: field.string({ required: true, index: true }),
-	externalActorId: field.string({ index: true }),
+	// External identifiers are pseudonymous personal data (a chat/user id addresses a person), and
+	// metadata carries whatever the ingress adapter stuffs in — so retention/erasure must be able to
+	// sweep them. `possible` marks them without transforming the stored value.
+	externalConversationId: field.string({
+		required: true,
+		index: true,
+		pii: "possible",
+	}),
+	externalActorId: field.string({ index: true, pii: "possible" }),
 	clawId: field.string({
 		required: true,
 		index: true,
@@ -197,7 +204,7 @@ export const conversationBindingFields = {
 		index: true,
 		references: { model: "thread", field: "id" },
 	}),
-	metadata: field.jsonObject(),
+	metadata: field.jsonObject({ pii: "possible" }),
 	createdAt: field.string({ required: true }),
 	updatedAt: field.string({ required: true }),
 } as const;

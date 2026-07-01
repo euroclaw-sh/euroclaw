@@ -145,4 +145,14 @@ describe("euroclaw core — durable Claw contracts", () => {
 			required: true,
 		});
 	});
+
+	it("marks conversation binding external identifiers as PII for erasure sweeps", () => {
+		const fields = clawsSchema.conversation_binding.fields;
+		expect(fields.externalConversationId.pii).toBe("possible");
+		expect(fields.externalActorId.pii).toBe("possible");
+		expect(fields.metadata.pii).toBe("possible");
+		// the opaque discriminator + internal keys are NOT personal data
+		expect(fields.provider.pii).toBeUndefined();
+		expect(fields.tenantId.pii).toBeUndefined();
+	});
 });
