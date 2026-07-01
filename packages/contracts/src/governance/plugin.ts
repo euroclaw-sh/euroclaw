@@ -20,6 +20,7 @@
 
 import type { ClawsStore } from "../claws/contracts";
 import type { EffectStore } from "../effects";
+import type { EntityField } from "../entity";
 import type { EventSink } from "../events";
 import type { AfterGate, BoundaryGate, Gate } from "./boundary";
 import type { ReasonCode } from "./reason-codes";
@@ -78,9 +79,10 @@ export type EuroclawCronTask<ClawLike = unknown> = {
 
 export type EuroclawCronFlag = "has-cron" | "no-cron" | "unknown-cron";
 
-// Core contributes the dependencies it OWNS (claws, effects, events). Plugins that need their own
-// stores (e.g. skills) read them structurally from the index signature — the assembly passes them
-// in, so core stays agnostic about what plugins exist.
+// Core contributes the dependencies it OWNS (claws, effects, events) plus the resolved storage adapter.
+// A plugin that owns its own tables (e.g. skills) reads the adapter structurally from the index
+// signature and builds its OWN store from it — the assembly passes it in, so core stays agnostic about
+// what plugins exist and never creates a plugin's store.
 export type EuroclawPluginConfigureContext = {
 	readonly clawsStore?: ClawsStore;
 	readonly effects?: EffectStore;
@@ -107,6 +109,15 @@ export type EuroclawPlugin<
 	$InferContext?: Record<string, unknown>;
 	/** Governance reason code catalog; merged (runtime + type) onto `ec.$REASON_CODES`. */
 	$REASON_CODES?: Record<string, ReasonCode>;
+	/**
+	 * Model schema this plugin contributes: extra fields on a default model (keyed by its name, e.g.
+	 * `claw`) or a brand-new table. The assembly merges these into the entity field maps (default <
+	 * plugin < host) — both the runtime schema/validators and the inferred record types. Declared with
+	 * `field.*()` builders, closed with `satisfies`.
+	 */
+	schema?: {
+		readonly [model: string]: { readonly fields: Record<string, EntityField> };
+	};
 	/** Before-gates this plugin installs (decide). */
 	gates?: Gate[];
 	/** Boundary before-gates this plugin installs (decide across tool/model boundaries). */
@@ -157,3 +168,26 @@ export type InferPlugins<Config> = FoldPluginField<Config, "$Infer">;
 export type InferPluginApi<Config> = FoldPluginField<Config, "$Api">;
 export type InferContext<Config> = FoldPluginField<Config, "$InferContext">;
 export type InferReasonCodes<Config> = FoldPluginField<Config, "$REASON_CODES">;
+
+/**
+ * Intersect the `schema[M].fields` map every plugin contributes for model `M` — the field-map analog
+ * of {@link InferPlugins}. Plugins that don't touch `M` contribute nothing. The assembly merges the
+ * result under the default field map (and over it goes the host's additions).
+ */
+export type InferPluginSchema<Config, M extends string> = Config extends {
+	plugins: infer P;
+}
+	? P extends ReadonlyArray<infer Item>
+		? UnionToIntersection<
+				Item extends { schema: infer S }
+					? S extends Record<M, { fields: infer F }>
+						? IsAny<F> extends true
+							? EmptyObject
+							: F extends Record<string, EntityField>
+								? F
+								: EmptyObject
+						: EmptyObject
+					: EmptyObject
+			>
+		: EmptyObject
+	: EmptyObject;

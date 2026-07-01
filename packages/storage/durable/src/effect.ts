@@ -1,37 +1,23 @@
+// createEffectStore — the EffectStore port (durable idempotency + lease-based execution), backed by
+// any @euroclaw/storage-core Adapter. JSON columns (output, error, compensation) are (de)serialized
+// by `schemaAdapter` from the effect storage schema, which also drops the storage-only
+// `leaseTokenHash` on read (returned:false) — the store never hand-rolls row mapping.
+
 import {
 	type EffectClaim,
 	type EffectRecord,
 	type EffectStore,
 	effectRecord as effectRecordSchema,
+	effectSchema,
 	jsonValue as jsonValueSchema,
 } from "@euroclaw/contracts";
-import { errorMessage, stateError, validationError } from "@euroclaw/errors";
-import type { Adapter } from "@euroclaw/storage-core";
+import { stateError, validationError } from "@euroclaw/errors";
+import { type Adapter, schemaAdapter } from "@euroclaw/storage-core";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, randomBytes, utf8ToBytes } from "@noble/hashes/utils.js";
 import { type } from "arktype";
 
-export type EffectStoreOptions = {
-	/** The table/model effects live in. Default "effect". */
-	model?: string;
-};
-
-const EffectRow = type({
-	id: "string",
-	status:
-		"'started' | 'completed' | 'failed' | 'compensating' | 'compensated' | 'compensation_failed'",
-	toolName: "string",
-	inputHash: "string",
-	"output?": "string | null | undefined",
-	"error?": "string | null | undefined",
-	"compensation?": "string | null | undefined",
-	"compensationEffectId?": "string | null | undefined",
-	"leaseTokenHash?": "string | null | undefined",
-	"leaseExpiresAt?": "string | null | undefined",
-	createdAt: "string",
-	updatedAt: "string",
-});
-
+const MODEL = "effect";
 const DEFAULT_EFFECT_LEASE_TTL_MS = 60_000;
 
 const newToken = (): string => bytesToHex(randomBytes(16));
@@ -40,33 +26,17 @@ const hashToken = (value: string): string =>
 const addMs = (iso: string, ms: number): string =>
 	new Date(new Date(iso).getTime() + ms).toISOString();
 
-function parseJson(value: string | null | undefined, label: string): unknown {
-	if (value == null) return undefined;
-	try {
-		return JSON.parse(value) as unknown;
-	} catch (err) {
-		throw validationError(`${label} invalid JSON`, errorMessage(err));
-	}
-}
-
-function stringifyJson(value: unknown, label: string): string | undefined {
-	if (value === undefined) return undefined;
+// JSON payloads (tool output / error) are validated as JsonValue at the boundary; `schemaAdapter`
+// owns the serialization to the storage column.
+function assertJsonValue(value: unknown, label: string): unknown {
 	const valid = jsonValueSchema(value);
 	if (valid instanceof type.errors) {
 		throw validationError(`${label} invalid`, valid.summary);
 	}
-	try {
-		const json = JSON.stringify(valid);
-		if (typeof json !== "string") {
-			throw validationError(`${label} invalid`, "must be JSON-serializable");
-		}
-		return json;
-	} catch (err) {
-		if (err instanceof Error && err.name === "EuroclawError") throw err;
-		throw validationError(`${label} invalid`, errorMessage(err));
-	}
+	return valid;
 }
 
+// Reads are untrusted boundary data; every read is PARSED through the record schema, never cast.
 function validateRecord(value: unknown): EffectRecord {
 	const valid = effectRecordSchema(value);
 	if (valid instanceof type.errors) {
@@ -75,57 +45,16 @@ function validateRecord(value: unknown): EffectRecord {
 	return valid;
 }
 
-function fromRow(row: unknown): EffectRecord {
-	const valid = EffectRow(row);
-	if (valid instanceof type.errors) {
-		throw validationError("effect row invalid", valid.summary);
-	}
-	return validateRecord({
-		id: valid.id,
-		status: valid.status,
-		toolName: valid.toolName,
-		inputHash: valid.inputHash,
-		output: parseJson(valid.output, "effect.output"),
-		error: parseJson(valid.error, "effect.error"),
-		compensation: parseJson(valid.compensation, "effect.compensation"),
-		compensationEffectId: valid.compensationEffectId ?? undefined,
-		leaseExpiresAt: valid.leaseExpiresAt ?? undefined,
-		createdAt: valid.createdAt,
-		updatedAt: valid.updatedAt,
-	});
-}
-
-function toRow(
-	record: EffectRecord,
-	leaseTokenHash?: string,
-): Record<string, unknown> {
-	const valid = validateRecord(record);
-	const row: Record<string, unknown> = {
-		...valid,
-		output: stringifyJson(valid.output, "effect.output"),
-		error: stringifyJson(valid.error, "effect.error"),
-		compensation: stringifyJson(valid.compensation, "effect.compensation"),
-		leaseTokenHash,
-	};
-	for (const key of Object.keys(row)) {
-		if (row[key] === undefined) delete row[key];
-	}
-	return row;
-}
-
-export function createEffectStore(
-	adapter: Adapter,
-	options: EffectStoreOptions = {},
-): EffectStore {
-	const model = options.model ?? "effect";
+export function createEffectStore(adapter: Adapter): EffectStore {
+	const db = schemaAdapter(adapter, effectSchema);
 	const locks = new Map<string, Promise<void>>();
 
 	const read = async (id: string): Promise<EffectRecord | null> => {
-		const row = await adapter.findOne<Record<string, unknown>>({
-			model,
+		const row = await db.findOne<EffectRecord>({
+			model: MODEL,
 			where: [{ field: "id", value: id }],
 		});
-		return row ? fromRow(row) : null;
+		return row ? validateRecord(row) : null;
 	};
 
 	const withLock = async <R>(id: string, fn: () => Promise<R>): Promise<R> => {
@@ -235,8 +164,8 @@ export function createEffectStore(
 					}
 					if (!record.leaseExpiresAt) return { status: "in_progress", record };
 					if (input.reclaimExpired === false) return uncertainClaim(record);
-					const row = await adapter.update<Record<string, unknown>>({
-						model,
+					const row = await db.update<EffectRecord>({
+						model: MODEL,
 						where: [
 							{ field: "id", value: input.id },
 							{ field: "status", value: "started", connector: "AND" },
@@ -249,7 +178,7 @@ export function createEffectStore(
 						],
 						update: { leaseTokenHash, leaseExpiresAt, updatedAt: input.now },
 					});
-					if (row) return claimRecord(fromRow(row));
+					if (row) return claimRecord(validateRecord(row));
 					const latest = await read(input.id);
 					if (!latest) return { status: "unavailable", record };
 					assertSameEffect(input, latest);
@@ -270,7 +199,10 @@ export function createEffectStore(
 					updatedAt: input.now,
 				};
 				try {
-					await adapter.create({ model, data: toRow(record, leaseTokenHash) });
+					await db.create({
+						model: MODEL,
+						data: { ...validateRecord(record), leaseTokenHash },
+					});
 					return claimRecord(record);
 				} catch (err) {
 					const raced = await read(input.id);
@@ -285,12 +217,12 @@ export function createEffectStore(
 				input.now,
 				input.leaseTtlMs ?? DEFAULT_EFFECT_LEASE_TTL_MS,
 			);
-			const row = await adapter.update<Record<string, unknown>>({
-				model,
+			const row = await db.update<EffectRecord>({
+				model: MODEL,
 				where: activeLeaseWhere(input),
 				update: { leaseExpiresAt, updatedAt: input.now },
 			});
-			return row ? fromRow(row) : null;
+			return row ? validateRecord(row) : null;
 		},
 
 		async complete(input) {
@@ -301,10 +233,10 @@ export function createEffectStore(
 				updatedAt: input.now,
 			};
 			if (input.output !== undefined) {
-				update.output = stringifyJson(input.output, "effect.output");
+				update.output = assertJsonValue(input.output, "effect.output");
 			}
-			const row = await adapter.update<Record<string, unknown>>({
-				model,
+			const row = await db.update<EffectRecord>({
+				model: MODEL,
 				where: activeLeaseWhere(input),
 				update,
 			});
@@ -312,21 +244,19 @@ export function createEffectStore(
 				throw validationError(
 					"effect complete invalid",
 					"effect lease is not active",
-					{
-						effectId: input.id,
-					},
+					{ effectId: input.id },
 				);
 			}
-			return fromRow(row);
+			return validateRecord(row);
 		},
 
 		async fail(input) {
-			const row = await adapter.update<Record<string, unknown>>({
-				model,
+			const row = await db.update<EffectRecord>({
+				model: MODEL,
 				where: activeLeaseWhere(input),
 				update: {
 					status: "failed",
-					error: stringifyJson(input.error, "effect.error"),
+					error: assertJsonValue(input.error, "effect.error"),
 					leaseTokenHash: null,
 					leaseExpiresAt: null,
 					updatedAt: input.now,
@@ -336,12 +266,10 @@ export function createEffectStore(
 				throw validationError(
 					"effect fail invalid",
 					"effect lease is not active",
-					{
-						effectId: input.id,
-					},
+					{ effectId: input.id },
 				);
 			}
-			return fromRow(row);
+			return validateRecord(row);
 		},
 	};
 }

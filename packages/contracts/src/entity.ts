@@ -349,8 +349,16 @@ export function entity<const Fields extends Record<string, EntityField>>(
 		name,
 		record,
 		storage,
-		schema: <const Options extends EntitySchemaOptions<Fields>>(
+		schema: <
+			const Options extends EntitySchemaOptions<Fields> = EmptyFieldMeta,
+		>(
 			input?: Options,
-		) => ark(shapeFor(fields, input)),
+		) =>
+			// Same bridge as `record` above: re-annotate the runtime-correct validator to the precise
+			// field-derived input type, so `schema(opts)(x)` yields `EntitySchemaInput<Fields, Options>
+			// | ArkErrors` with no cast at the parse site.
+			ark(shapeFor(fields, input)) as unknown as Type<
+				EntitySchemaInput<Fields, Options>
+			>,
 	};
 }

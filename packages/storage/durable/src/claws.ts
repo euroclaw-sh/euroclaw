@@ -9,7 +9,6 @@ import {
 	type ConversationBindingRecord,
 	type CreateChannelEndpointInput,
 	type CreateCheckpointInput,
-	type CreateClawInput,
 	type CreateConversationBindingInput,
 	type CreateThreadInput,
 	type CreateToolCallInput,
@@ -17,16 +16,18 @@ import {
 	channelEndpointLookupInput,
 	channelEndpointRecord,
 	checkpointRecord,
-	clawRecord,
+	clawFields,
 	clawsSchema,
 	conversationBindingRecord,
 	createChannelEndpointInput,
 	createCheckpointInput,
-	createClawInput,
+	createClawInputOptions,
 	createConversationBindingInput,
 	createThreadInput,
 	createToolCallInput,
 	createToolResultInput,
+	type EntityField,
+	entity,
 	type MessageRecord,
 	messageRecord,
 	type ThreadRecord,
@@ -55,28 +56,18 @@ import { type } from "arktype";
 export type ClawsStoreOptions = {
 	/** Time source for deterministic tests and host-controlled timestamps. */
 	now?: () => string;
+	/**
+	 * Extra fields to merge onto a default model's schema — the host's `additionalFields` plus every
+	 * plugin's `schema`. The store rebuilds that model's entity/validators + storage from the merged
+	 * field map, so the extra columns are persisted, validated, and returned. Keyed by model name.
+	 */
+	additionalFields?: { readonly claw?: Record<string, EntityField> };
 };
 
 const newId = (): string => bytesToHex(randomBytes(16));
 
-function assertCreateClawInput(input: unknown): CreateClawInput {
-	const valid = createClawInput(input) as CreateClawInput | type.errors;
-	if (valid instanceof type.errors) {
-		throw validationError("create claw input invalid", valid.summary);
-	}
-	return valid;
-}
-
-function assertClawRecord(input: unknown): ClawRecord {
-	const valid = clawRecord(input);
-	if (valid instanceof type.errors) {
-		throw validationError("claw record invalid", valid.summary);
-	}
-	return valid;
-}
-
 function assertCreateThreadInput(input: unknown): CreateThreadInput {
-	const valid = createThreadInput(input) as CreateThreadInput | type.errors;
+	const valid = createThreadInput(input);
 	if (valid instanceof type.errors) {
 		throw validationError("create thread input invalid", valid.summary);
 	}
@@ -92,7 +83,7 @@ function assertThreadRecord(input: unknown): ThreadRecord {
 }
 
 function assertAppendMessageInput(input: unknown): AppendMessageInput {
-	const valid = appendMessageInput(input) as AppendMessageInput | type.errors;
+	const valid = appendMessageInput(input);
 	if (valid instanceof type.errors) {
 		throw validationError("append message input invalid", valid.summary);
 	}
@@ -108,7 +99,7 @@ function assertMessageRecord(input: unknown): MessageRecord {
 }
 
 function assertCreateToolCallInput(input: unknown): CreateToolCallInput {
-	const valid = createToolCallInput(input) as CreateToolCallInput | type.errors;
+	const valid = createToolCallInput(input);
 	if (valid instanceof type.errors) {
 		throw validationError("create tool call input invalid", valid.summary);
 	}
@@ -124,9 +115,7 @@ function assertToolCallRecord(input: unknown): ToolCallRecord {
 }
 
 function assertCreateToolResultInput(input: unknown): CreateToolResultInput {
-	const valid = createToolResultInput(input) as
-		| CreateToolResultInput
-		| type.errors;
+	const valid = createToolResultInput(input);
 	if (valid instanceof type.errors) {
 		throw validationError("create tool result input invalid", valid.summary);
 	}
@@ -142,9 +131,7 @@ function assertToolResultRecord(input: unknown): ToolResultRecord {
 }
 
 function assertCreateCheckpointInput(input: unknown): CreateCheckpointInput {
-	const valid = createCheckpointInput(input) as
-		| CreateCheckpointInput
-		| type.errors;
+	const valid = createCheckpointInput(input);
 	if (valid instanceof type.errors) {
 		throw validationError("create checkpoint input invalid", valid.summary);
 	}
@@ -162,9 +149,7 @@ function assertCheckpointRecord(input: unknown): CheckpointRecord {
 function assertCreateConversationBindingInput(
 	input: unknown,
 ): CreateConversationBindingInput {
-	const valid = createConversationBindingInput(input) as
-		| CreateConversationBindingInput
-		| type.errors;
+	const valid = createConversationBindingInput(input);
 	if (valid instanceof type.errors) {
 		throw validationError(
 			"create conversation binding input invalid",
@@ -177,9 +162,7 @@ function assertCreateConversationBindingInput(
 function assertConversationBindingRecord(
 	input: unknown,
 ): ConversationBindingRecord {
-	const valid = conversationBindingRecord(input) as
-		| ConversationBindingRecord
-		| type.errors;
+	const valid = conversationBindingRecord(input);
 	if (valid instanceof type.errors) {
 		throw validationError("conversation binding record invalid", valid.summary);
 	}
@@ -189,9 +172,7 @@ function assertConversationBindingRecord(
 function assertCreateChannelEndpointInput(
 	input: unknown,
 ): CreateChannelEndpointInput {
-	const valid = createChannelEndpointInput(input) as
-		| CreateChannelEndpointInput
-		| type.errors;
+	const valid = createChannelEndpointInput(input);
 	if (valid instanceof type.errors) {
 		throw validationError(
 			"create channel endpoint input invalid",
@@ -202,9 +183,7 @@ function assertCreateChannelEndpointInput(
 }
 
 function assertChannelEndpointLookup(input: unknown): ChannelEndpointLookup {
-	const valid = channelEndpointLookupInput(input) as
-		| ChannelEndpointLookup
-		| type.errors;
+	const valid = channelEndpointLookupInput(input);
 	if (valid instanceof type.errors) {
 		throw validationError("channel endpoint lookup invalid", valid.summary);
 	}
@@ -214,9 +193,7 @@ function assertChannelEndpointLookup(input: unknown): ChannelEndpointLookup {
 function assertUpdateChannelEndpointInput(
 	input: unknown,
 ): UpdateChannelEndpointInput {
-	const valid = updateChannelEndpointInput(input) as
-		| UpdateChannelEndpointInput
-		| type.errors;
+	const valid = updateChannelEndpointInput(input);
 	if (valid instanceof type.errors) {
 		throw validationError(
 			"update channel endpoint input invalid",
@@ -227,9 +204,7 @@ function assertUpdateChannelEndpointInput(
 }
 
 function assertChannelEndpointRecord(input: unknown): ChannelEndpointRecord {
-	const valid = channelEndpointRecord(input) as
-		| ChannelEndpointRecord
-		| type.errors;
+	const valid = channelEndpointRecord(input);
 	if (valid instanceof type.errors) {
 		throw validationError("channel endpoint record invalid", valid.summary);
 	}
@@ -270,7 +245,33 @@ export function createClawsStore(
 	options: ClawsStoreOptions = {},
 ): ClawsStore {
 	const now = options.now ?? (() => new Date().toISOString());
-	const db = schemaAdapter(adapter, clawsSchema);
+
+	// Merge host/plugin extra fields onto the claw model and rebuild its validators + storage schema,
+	// so the extra columns round-trip. With no extras this is exactly the default claw entity. Other
+	// models keep their fixed schema until they're opened up too.
+	const clawEntityMerged = entity("claw", {
+		...clawFields,
+		...(options.additionalFields?.claw ?? {}),
+	});
+	const db = schemaAdapter(adapter, {
+		...clawsSchema,
+		...clawEntityMerged.storage,
+	});
+	const createClawInputMerged = clawEntityMerged.schema(createClawInputOptions);
+	const assertClawRecord = (input: unknown) => {
+		const valid = clawEntityMerged.record(input);
+		if (valid instanceof type.errors) {
+			throw validationError("claw record invalid", valid.summary);
+		}
+		return valid;
+	};
+	const assertCreateClawInput = (input: unknown) => {
+		const valid = createClawInputMerged(input);
+		if (valid instanceof type.errors) {
+			throw validationError("create claw input invalid", valid.summary);
+		}
+		return valid;
+	};
 
 	return {
 		channelEndpoints: {
@@ -353,16 +354,13 @@ export function createClawsStore(
 			async create(input) {
 				const valid = assertCreateClawInput(input);
 				const ts = now();
+				// `...valid` carries the merged input — base fields AND any host/plugin extra fields —
+				// then the explicit keys set the server-owned defaults (id, status, timestamps).
 				const record = assertClawRecord({
+					...valid,
 					id: valid.id ?? newId(),
-					tenantId: valid.tenantId,
-					teamId: valid.teamId,
-					ownerActorId: valid.ownerActorId,
 					status: "active",
-					name: valid.name,
-					instructions: valid.instructions,
 					context: valid.context ?? {},
-					memoryNamespace: valid.memoryNamespace,
 					createdAt: ts,
 					updatedAt: ts,
 				});

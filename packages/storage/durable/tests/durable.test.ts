@@ -94,7 +94,7 @@ function suite(
 				},
 			});
 
-			await expect(store.list()).rejects.toThrow(/approval args invalid/);
+			await expect(store.list()).rejects.toThrow(/approval record invalid/);
 		});
 	});
 }

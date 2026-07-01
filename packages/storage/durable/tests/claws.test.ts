@@ -1,3 +1,4 @@
+import { field } from "@euroclaw/contracts";
 import { type Adapter, memoryAdapter } from "@euroclaw/storage-core";
 import { describe, expect, it } from "vitest";
 import { createClawsStore } from "../src/claws";
@@ -49,6 +50,43 @@ describe("createClawsStore", () => {
 			where: [{ field: "id", value: claw.id }],
 		});
 		expect(rawClaw?.context).toBe(JSON.stringify({ locale: "en" }));
+	});
+
+	it("persists, returns, and reads back extra fields merged onto the claw model", async () => {
+		const adapter = memoryAdapter();
+		const claws = createClawsStore(adapter, {
+			now: () => "2026-01-01T00:00:00.000Z",
+			additionalFields: {
+				claw: { priority: field.number({ required: true }) },
+			},
+		});
+
+		// A plain variable (not a fresh literal) so the extra `priority` isn't rejected by the base
+		// CreateClawInput type — the store's typed contract stays base; extra fields are runtime.
+		const input = { id: "claw-x", tenantId: "tenant-1", priority: 5 };
+		const created = await claws.claws.create(input);
+
+		// returned straight from create…
+		expect(created).toMatchObject({ id: "claw-x", priority: 5 });
+		// …round-trips through get…
+		expect(await claws.claws.get("claw-x")).toMatchObject({ priority: 5 });
+		// …and is a real persisted column, not dropped on the floor.
+		const raw = await adapter.findOne<Record<string, unknown>>({
+			model: "claw",
+			where: [{ field: "id", value: "claw-x" }],
+		});
+		expect(raw?.priority).toBe(5);
+	});
+
+	it("rejects a claw whose required extra field is missing", async () => {
+		const claws = createClawsStore(memoryAdapter(), {
+			additionalFields: {
+				claw: { priority: field.number({ required: true }) },
+			},
+		});
+		await expect(
+			claws.claws.create({ id: "claw-y", tenantId: "tenant-1" }),
+		).rejects.toThrow(/create claw input invalid/);
 	});
 
 	it("appends messages transactionally and advances the thread cursor", async () => {
