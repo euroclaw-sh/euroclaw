@@ -1,0 +1,210 @@
+import {
+	configurationError,
+	defineReasonCodes,
+	type EuroclawPlugin,
+	type EuroclawPluginConfigureContext,
+	type GateDecision,
+	type ToolCall,
+	type TurnContext,
+} from "@euroclaw/contracts";
+import type { Adapter } from "@euroclaw/storage-core";
+import { type SkillsStore, skillsModels } from "../core";
+import { createSkillsStore } from "../store/store";
+import type {
+	ActiveSkillRef,
+	SkillManifest,
+	SkillsApiOptions,
+	SkillsPluginConfig,
+} from "./contracts";
+import { assertSkillManifests } from "./manifest";
+import { parseActiveSkillSelection, refLabel } from "./refs";
+import { isReservedToolName } from "./reserved";
+import { recordedActiveSkillRefs, resolveActiveSkill } from "./resolution";
+
+export const skillReasonCodes = defineReasonCodes({
+	ACTIVE_SKILL_FORBIDDEN: "The actor cannot activate this skill.",
+	ACTIVE_SKILL_TENANT_REQUIRED:
+		"A tenant is required to resolve active database-backed skills.",
+	ACTIVE_SKILL_UNAVAILABLE: "An active skill is not enabled or trusted.",
+	NO_ACTIVE_SKILL: "No active skill permits this tool call.",
+	SKILL_TOOL_NOT_ALLOWED: "The active skills do not permit this tool.",
+	UNKNOWN_ACTIVE_SKILL: "An active skill is not installed.",
+});
+
+function deny(
+	reasonCode: keyof typeof skillReasonCodes,
+	reason: string,
+): GateDecision {
+	return { decision: "deny", reason, reasonCode };
+}
+
+/** Narrow the resolved adapter the assembly passes through the configure context's index signature. */
+export function contextAdapter(context: unknown): Adapter | undefined {
+	if (context === null || typeof context !== "object") return undefined;
+	const value = (context as { adapter?: unknown }).adapter;
+	if (value === null || typeof value !== "object") return undefined;
+	return value as Adapter;
+}
+
+export function requireSkillsStore(
+	store: SkillsStore | undefined,
+): SkillsStore {
+	if (!store) {
+		throw configurationError("claw.api.skills requires a SkillsStore", {
+			reason:
+				"pass database, stores.skills, or an explicit store to skillsPlugin",
+		});
+	}
+	return store;
+}
+
+export type SkillsApiFactory<TApi> = (
+	store: SkillsStore | undefined,
+	options: SkillsApiOptions,
+) => TApi;
+
+/**
+ * Shared plugin shell: active-skill resolution plus the opt-in allowed-tools gate. Both the simple
+ * plugin and the governed plugin build on this, differing only in the api surface produced by
+ * `apiFactory`.
+ */
+export function buildSkillsPlugin<
+	const Skills extends readonly SkillManifest[],
+	TApi,
+>(
+	config: SkillsPluginConfig<Skills>,
+	apiFactory: SkillsApiFactory<TApi>,
+): EuroclawPlugin<"no-cron", readonly string[], { readonly skills: TApi }> & {
+	readonly $Infer?: { readonly skills: Skills[number] };
+} {
+	const skills = assertSkillManifests(config.skills);
+	const skillById = new Map<string, SkillManifest>();
+	for (const skill of skills) {
+		if (skillById.has(skill.id)) {
+			throw configurationError("duplicate skill id", { skillId: skill.id });
+		}
+		skillById.set(skill.id, skill);
+	}
+	const allSkillIds = skills.map((skill) => skill.id);
+	const staticActiveSelection =
+		typeof config.active === "function" ? undefined : config.active;
+	const staticActive =
+		staticActiveSelection === undefined || staticActiveSelection === "recorded"
+			? undefined
+			: parseActiveSkillSelection(staticActiveSelection, allSkillIds);
+
+	const resolveActiveSkillRefs = async (
+		ctx: TurnContext,
+	): Promise<ActiveSkillRef[]> => {
+		if (typeof config.active !== "function") {
+			return (
+				staticActive ?? recordedActiveSkillRefs({ ctx, store: config.store })
+			);
+		}
+		const selection = await config.active(ctx);
+		return selection === undefined || selection === "recorded"
+			? recordedActiveSkillRefs({ ctx, store: config.store })
+			: parseActiveSkillSelection(selection, allSkillIds);
+	};
+	const configure = (
+		context: EuroclawPluginConfigureContext,
+	): ReturnType<typeof buildSkillsPlugin<Skills, TApi>> | undefined => {
+		// Core stays skills-agnostic: the assembly passes the resolved adapter through the configure
+		// context's index signature, and this plugin builds its OWN store from it — nothing outside this
+		// package creates a skills store. A host-supplied store wins; no adapter means static-only skills.
+		if (config.store) return undefined;
+		const adapter = contextAdapter(context);
+		if (!adapter) return undefined;
+		return buildSkillsPlugin(
+			{ ...config, store: createSkillsStore(adapter) },
+			apiFactory,
+		);
+	};
+
+	// The subtractive allowed-tools gate: a tool is denied unless an active skill lists it. Skills
+	// are additive by default (skills-plan-v2), so this gate is OPT-IN via `enforceAllowedTools` —
+	// off by default, installing the plugin never restricts the tool surface. Reserved meta-tools
+	// are always exempt (they bootstrap activation). When on, it is sealed by default.
+	const allowedToolsGate = {
+		id: config.gateId ?? "skills:allowed-tools",
+		sealed: config.sealed ?? true,
+		matcher: (call: ToolCall) => !isReservedToolName(call.name),
+		handler: async (
+			call: ToolCall,
+			ctx: TurnContext,
+		): Promise<GateDecision> => {
+			const activeSkillRefs = await resolveActiveSkillRefs(ctx);
+			if (activeSkillRefs.length === 0) {
+				return deny(
+					"NO_ACTIVE_SKILL",
+					`tool "${call.name}" denied because no skills are active`,
+				);
+			}
+
+			const allowedTools = new Set<string>();
+			const store = config.store;
+			const activeLabels: string[] = [];
+			for (const ref of activeSkillRefs) {
+				activeLabels.push(refLabel(ref));
+				const resolution = await resolveActiveSkill({
+					ctx,
+					ref,
+					skillById,
+					store,
+				});
+				if (resolution.status === "tenant_required") {
+					return deny(
+						"ACTIVE_SKILL_TENANT_REQUIRED",
+						`active skill "${refLabel(ref)}" requires tenant context`,
+					);
+				}
+				if (resolution.status === "unavailable") {
+					return deny(
+						"ACTIVE_SKILL_UNAVAILABLE",
+						`active skill "${refLabel(ref)}" is not enabled or trusted`,
+					);
+				}
+				if (resolution.status === "forbidden") {
+					return deny(
+						"ACTIVE_SKILL_FORBIDDEN",
+						`active skill "${refLabel(ref)}" cannot be activated by this context`,
+					);
+				}
+				if (resolution.status === "missing") {
+					return deny(
+						"UNKNOWN_ACTIVE_SKILL",
+						`active skill "${refLabel(ref)}" is not installed`,
+					);
+				}
+				for (const toolName of resolution.manifest.allowedTools ?? [])
+					allowedTools.add(toolName);
+			}
+
+			if (allowedTools.has(call.name)) return { decision: "permit" };
+			return deny(
+				"SKILL_TOOL_NOT_ALLOWED",
+				`tool "${call.name}" is not allowed by active skills: ${activeLabels.join(", ")}`,
+			);
+		},
+	};
+
+	return {
+		id: config.id ?? "euroclaw.skills",
+		$HasCron: "no-cron",
+		$Api: {} as { readonly skills: TApi },
+		$Infer: {} as { readonly skills: Skills[number] },
+		$REASON_CODES: skillReasonCodes,
+		// The tables this plugin owns — collected by getEuroclawTables into the migration schema. The
+		// same models back the skills store, so registering the plugin is what puts skills on disk.
+		schema: skillsModels,
+		configure,
+		api: () => ({
+			skills: apiFactory(config.store, {
+				activationContext: config.activationContext,
+				readContext: config.readContext,
+				staticSkills: skills,
+			}),
+		}),
+		gates: config.enforceAllowedTools ? [allowedToolsGate] : [],
+	};
+}

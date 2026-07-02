@@ -1,0 +1,160 @@
+import type { EntityRecord, EntitySchemaInput } from "@euroclaw/contracts";
+import type {
+	createSkillAclInputOptions,
+	createSkillActivationInputOptions,
+	createSkillInstallationInputOptions,
+	createSkillPackageInputOptions,
+	createSkillProposalInputOptions,
+	createSkillReadInputOptions,
+	skillAclFields,
+	skillAclPermissionValues,
+	skillAclPrincipalTypeValues,
+	skillActivationFields,
+	skillActivationSourceValues,
+	skillInstallationFields,
+	skillInstallationStatusValues,
+	skillInstallationVisibilityValues,
+	skillManifest,
+	skillPackageFields,
+	skillPackageSourceValues,
+	skillProposalFields,
+	skillProposalKindValues,
+	skillProposalStatusValues,
+	skillReadFields,
+	skillReadSourceValues,
+} from "./schema";
+
+export type SkillManifest = typeof skillManifest.infer;
+export type SkillPackageSource = (typeof skillPackageSourceValues)[number];
+export type SkillInstallationVisibility =
+	(typeof skillInstallationVisibilityValues)[number];
+export type SkillInstallationStatus =
+	(typeof skillInstallationStatusValues)[number];
+export type SkillAclPrincipalType =
+	(typeof skillAclPrincipalTypeValues)[number];
+export type SkillAclPermission = (typeof skillAclPermissionValues)[number];
+export type SkillActivationSource =
+	(typeof skillActivationSourceValues)[number];
+export type SkillReadSource = (typeof skillReadSourceValues)[number];
+export type SkillProposalKind = (typeof skillProposalKindValues)[number];
+export type SkillProposalStatus = (typeof skillProposalStatusValues)[number];
+
+export type SkillPackageRecord = EntityRecord<typeof skillPackageFields>;
+export type SkillInstallationRecord = EntityRecord<
+	typeof skillInstallationFields
+>;
+export type SkillAclRecord = EntityRecord<typeof skillAclFields>;
+export type SkillActivationRecord = EntityRecord<typeof skillActivationFields>;
+export type SkillReadRecord = EntityRecord<typeof skillReadFields>;
+export type SkillProposalRecord = EntityRecord<typeof skillProposalFields>;
+
+export type CreateSkillPackageInput = EntitySchemaInput<
+	typeof skillPackageFields,
+	typeof createSkillPackageInputOptions
+>;
+export type CreateSkillInstallationInput = EntitySchemaInput<
+	typeof skillInstallationFields,
+	typeof createSkillInstallationInputOptions
+>;
+export type CreateSkillAclInput = EntitySchemaInput<
+	typeof skillAclFields,
+	typeof createSkillAclInputOptions
+>;
+export type CreateSkillActivationInput = EntitySchemaInput<
+	typeof skillActivationFields,
+	typeof createSkillActivationInputOptions
+>;
+export type CreateSkillReadInput = EntitySchemaInput<
+	typeof skillReadFields,
+	typeof createSkillReadInputOptions
+>;
+export type CreateSkillProposalInput = EntitySchemaInput<
+	typeof skillProposalFields,
+	typeof createSkillProposalInputOptions
+>;
+
+export type SkillInstallationStatusPatch = Partial<
+	Pick<SkillInstallationRecord, "status" | "trustedBy" | "enabledBy">
+>;
+
+export type SkillProposalStatusPatch = Partial<
+	Pick<SkillProposalRecord, "status" | "state">
+>;
+
+export type SkillPackageStore = {
+	create: (input: CreateSkillPackageInput) => Promise<SkillPackageRecord>;
+	get: (id: string) => Promise<SkillPackageRecord | null>;
+	getByDigest: (digest: string) => Promise<SkillPackageRecord | null>;
+	getByPackageVersion: (input: {
+		packageId: string;
+		version: string;
+	}) => Promise<SkillPackageRecord | null>;
+	list: (input?: {
+		publisher?: string;
+		source?: SkillPackageSource;
+	}) => Promise<SkillPackageRecord[]>;
+};
+
+export type SkillInstallationStore = {
+	create: (
+		input: CreateSkillInstallationInput,
+	) => Promise<SkillInstallationRecord>;
+	get: (id: string) => Promise<SkillInstallationRecord | null>;
+	listForTenant: (input: {
+		status?: SkillInstallationStatus;
+		tenantId: string;
+		visibility?: SkillInstallationVisibility;
+	}) => Promise<SkillInstallationRecord[]>;
+	updateStatus: (
+		id: string,
+		patch: SkillInstallationStatusPatch,
+	) => Promise<SkillInstallationRecord | null>;
+};
+
+export type SkillAclStore = {
+	grant: (input: CreateSkillAclInput) => Promise<SkillAclRecord>;
+	get: (id: string) => Promise<SkillAclRecord | null>;
+	listForInstallation: (installationId: string) => Promise<SkillAclRecord[]>;
+	listForPrincipal: (input: {
+		permission?: SkillAclPermission;
+		principalId?: string;
+		principalType: SkillAclPrincipalType;
+		tenantId: string;
+	}) => Promise<SkillAclRecord[]>;
+};
+
+export type SkillActivationStore = {
+	create: (input: CreateSkillActivationInput) => Promise<SkillActivationRecord>;
+	get: (id: string) => Promise<SkillActivationRecord | null>;
+	listForRun: (runId: string) => Promise<SkillActivationRecord[]>;
+	listForThread: (threadId: string) => Promise<SkillActivationRecord[]>;
+};
+
+export type SkillReadStore = {
+	create: (input: CreateSkillReadInput) => Promise<SkillReadRecord>;
+	get: (id: string) => Promise<SkillReadRecord | null>;
+	listForRun: (runId: string) => Promise<SkillReadRecord[]>;
+	listForThread: (threadId: string) => Promise<SkillReadRecord[]>;
+};
+
+export type SkillProposalStore = {
+	create: (input: CreateSkillProposalInput) => Promise<SkillProposalRecord>;
+	get: (id: string) => Promise<SkillProposalRecord | null>;
+	listForTenant: (input: {
+		status?: SkillProposalStatus;
+		tenantId: string;
+	}) => Promise<SkillProposalRecord[]>;
+	updateStatus: (
+		id: string,
+		patch: SkillProposalStatusPatch,
+	) => Promise<SkillProposalRecord | null>;
+};
+
+export type SkillsStore = {
+	packages: SkillPackageStore;
+	installations: SkillInstallationStore;
+	acl: SkillAclStore;
+	activations: SkillActivationStore;
+	reads: SkillReadStore;
+	proposals: SkillProposalStore;
+};

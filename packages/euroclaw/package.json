@@ -32,6 +32,7 @@
 	},
 	"devDependencies": {
 		"@euroclaw/core": "workspace:*",
+		"@euroclaw/skills": "workspace:*",
 		"@euroclaw/storage-core": "workspace:*",
 		"ai": "5.0.203"
 	}
