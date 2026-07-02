@@ -2,13 +2,10 @@ import type {
 	AppendMessageInput,
 	ApprovalRecord,
 	ApprovalStatus,
-	ChannelEndpointLookup,
-	ChannelEndpointRecord,
 	CheckpointRecord,
 	ClawRecord,
 	ClawsStore,
 	ConversationBindingRecord,
-	CreateChannelEndpointInput,
 	CreateCheckpointInput,
 	CreateClawInput,
 	CreateThreadInput,
@@ -21,18 +18,15 @@ import type {
 	ToolCallRecord,
 	ToolCallStatusPatch,
 	ToolResultRecord,
-	UpdateChannelEndpointByKeyInput,
 	UpdateClawInput,
 } from "@euroclaw/contracts";
 import {
 	appendMessageInput,
 	approvalStatus,
-	channelEndpointLookupInput,
 	clawEntity,
 	clawRecord,
 	configurationError,
 	conversationBindingRecord,
-	createChannelEndpointInput,
 	createCheckpointInput,
 	createClawInput,
 	createThreadInput,
@@ -44,7 +38,6 @@ import {
 	threadEntity,
 	threadRecord,
 	toolCallEntity,
-	updateChannelEndpointInput,
 	validationError,
 } from "@euroclaw/contracts";
 import type {
@@ -116,15 +109,6 @@ export type ClawApi<Config extends RuntimeConfig = RuntimeConfig> = {
 	bindConversation: (
 		input: BindConversationInput,
 	) => Promise<BindConversationResult>;
-	getChannelEndpoint: (
-		input: ChannelEndpointLookup,
-	) => Promise<ChannelEndpointRecord | null>;
-	upsertChannelEndpoint: (
-		input: CreateChannelEndpointInput,
-	) => Promise<ChannelEndpointRecord>;
-	updateChannelEndpoint: (
-		input: UpdateChannelEndpointByKeyInput,
-	) => Promise<ChannelEndpointRecord | null>;
 
 	// Claw records are config-shaped: host `additionalFields` and plugin `schema` widen both the input
 	// and the returned record. Extra fields aren't patchable yet, so `updateClaw` keeps the base patch.
@@ -240,14 +224,11 @@ const engineRunMetadataInput = ark({
 	"team?": "string | undefined",
 });
 const engineRunMetadataOrUndefined = engineRunMetadataInput.or("undefined");
-const updateClawPatchInput = clawEntity.schema({
-	optional: ["status", "name", "instructions", "context", "memoryNamespace"],
-	pick: ["status", "name", "instructions", "context", "memoryNamespace"],
-});
-const toolCallStatusPatchInput = toolCallEntity.schema({
-	optional: ["status", "approvalId", "effectId", "updatedAt"],
-	pick: ["status", "approvalId", "effectId", "updatedAt"],
-});
+// Both derive straight from the entities' immutable/input flags — every mutable, caller-facing column,
+// all optional. No hand-listed pick/optional (which is also why the updatedAt server column no longer
+// leaks into the tool-call patch).
+const updateClawPatchInput = clawEntity.updateSchema();
+const toolCallStatusPatchInput = toolCallEntity.updateSchema();
 export const bindConversationClawInput = clawEntity.schema({
 	omit: ["tenantId", "status", "createdAt", "updatedAt"],
 	optional: ["id", "context"],
@@ -348,18 +329,8 @@ export type BindConversationResult = Omit<
 	thread: ThreadRecord;
 };
 
-const updateChannelEndpointByKeyInput = ark({
-	endpointKey: "string",
-	patch: updateChannelEndpointInput,
-	provider: "string",
-	tenantId: "string",
-});
-
 export const clawApiInputSchemas = {
 	bindConversation: bindConversationInput,
-	getChannelEndpoint: channelEndpointLookupInput,
-	updateChannelEndpoint: updateChannelEndpointByKeyInput,
-	upsertChannelEndpoint: createChannelEndpointInput,
 	appendMessage: appendMessageInput,
 	archiveClaw: idInput,
 	archiveThread: idInput,
@@ -606,10 +577,6 @@ export function createClawApi<Config extends RuntimeConfig>(input: {
 			});
 			return { binding, claw, thread, created: true };
 		},
-
-		getChannelEndpoint: (args) => store().channelEndpoints.getByKey(args),
-		upsertChannelEndpoint: (args) => store().channelEndpoints.upsert(args),
-		updateChannelEndpoint: (args) => store().channelEndpoints.updateByKey(args),
 
 		createClaw: (args) => store().claws.create(args),
 		getClaw: ({ id }) => store().claws.get(id),

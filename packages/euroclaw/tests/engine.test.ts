@@ -109,7 +109,6 @@ describe("createClaw engine", () => {
 			"createToolResult",
 			"denyApproval",
 			"getApproval",
-			"getChannelEndpoint",
 			"getCheckpoint",
 			"getClaw",
 			"getEffect",
@@ -129,10 +128,8 @@ describe("createClaw engine", () => {
 			"run",
 			"sendMessage",
 			"startRun",
-			"updateChannelEndpoint",
 			"updateClaw",
 			"updateToolCallStatus",
-			"upsertChannelEndpoint",
 		]);
 	});
 

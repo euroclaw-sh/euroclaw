@@ -32,15 +32,6 @@ export const checkpointKindValues = [
 	"replay",
 	"fork",
 ] as const;
-export const channelEndpointModeValues = ["webhook", "poll"] as const;
-export const channelEndpointStatusValues = [
-	"pending",
-	"provisioned",
-	"validated",
-	"disabled",
-	"expired",
-	"error",
-] as const;
 
 export const clawStatus = type("'active' | 'paused' | 'archived'");
 export const threadStatus = type("'active' | 'archived'");
@@ -56,40 +47,40 @@ export const toolResultOutputMode = type("'none' | 'redacted' | 'full'");
 export const checkpointKind = type(
 	"'step' | 'approval_wait' | 'compaction' | 'replay' | 'fork'",
 );
-export const channelEndpointMode = type("'webhook' | 'poll'");
-export const channelEndpointStatus = type(
-	"'pending' | 'provisioned' | 'validated' | 'disabled' | 'expired' | 'error'",
-);
 
 export const clawFields = {
-	id: field.string({ required: true, unique: true }),
-	tenantId: field.string({ required: true, index: true }),
-	teamId: field.string({ index: true }),
-	ownerActorId: field.string({ index: true }),
+	// Identity + ownership are set at create and never updated — immutable (the update input derives
+	// around them, and the storage layer rejects an update that touches them).
+	id: field.string({ required: true, unique: true, immutable: true }),
+	tenantId: field.string({ required: true, index: true, immutable: true }),
+	teamId: field.string({ index: true, immutable: true }),
+	ownerActorId: field.string({ index: true, immutable: true }),
 	status: field.enum(clawStatusValues, { required: true }),
 	name: field.string(),
 	instructions: field.string({ pii: "possible" }),
 	context: field.jsonObject({ required: true }),
 	memoryNamespace: field.string(),
-	createdAt: field.string({ required: true }),
-	updatedAt: field.string({ required: true }),
+	createdAt: field.string({ required: true, immutable: true }),
+	updatedAt: field.string({ required: true, input: false }),
 } as const;
 
 export const threadFields = {
-	id: field.string({ required: true, unique: true }),
+	// Identity + ownership are fixed at create; only status and the message cursor advance.
+	id: field.string({ required: true, unique: true, immutable: true }),
 	clawId: field.string({
 		required: true,
 		index: true,
+		immutable: true,
 		references: { model: "claw", field: "id" },
 	}),
-	tenantId: field.string({ required: true, index: true }),
-	teamId: field.string({ index: true }),
-	ownerActorId: field.string({ index: true }),
+	tenantId: field.string({ required: true, index: true, immutable: true }),
+	teamId: field.string({ index: true, immutable: true }),
+	ownerActorId: field.string({ index: true, immutable: true }),
 	title: field.string(),
 	status: field.enum(threadStatusValues, { required: true }),
 	currentMessageId: field.string(),
 	currentSequence: field.number({ required: true }),
-	createdAt: field.string({ required: true }),
+	createdAt: field.string({ required: true, immutable: true }),
 	updatedAt: field.string({ required: true }),
 } as const;
 
@@ -115,27 +106,32 @@ export const messageFields = {
 } as const;
 
 export const toolCallFields = {
-	id: field.string({ required: true, unique: true }),
+	// A tool call's identity and inputs are fixed once proposed; only its progression (status →
+	// approval → effect) changes. So everything but status/approvalId/effectId is immutable, and the
+	// update patch derives to exactly those three.
+	id: field.string({ required: true, unique: true, immutable: true }),
 	clawId: field.string({
 		required: true,
 		index: true,
+		immutable: true,
 		references: { model: "claw", field: "id" },
 	}),
 	threadId: field.string({
 		required: true,
 		index: true,
+		immutable: true,
 		references: { model: "thread", field: "id" },
 	}),
-	runId: field.string({ required: true, index: true }),
-	assistantMessageId: field.string({ index: true }),
-	toolCallId: field.string({ required: true, index: true }),
-	toolName: field.string({ required: true, index: true }),
-	args: field.jsonObject({ required: true, pii: "redacted" }),
+	runId: field.string({ required: true, index: true, immutable: true }),
+	assistantMessageId: field.string({ index: true, immutable: true }),
+	toolCallId: field.string({ required: true, index: true, immutable: true }),
+	toolName: field.string({ required: true, index: true, immutable: true }),
+	args: field.jsonObject({ required: true, pii: "redacted", immutable: true }),
 	status: field.enum(toolCallStatusValues, { required: true, index: true }),
 	approvalId: field.string({ index: true }),
 	effectId: field.string({ index: true }),
-	createdAt: field.string({ required: true }),
-	updatedAt: field.string({ required: true }),
+	createdAt: field.string({ required: true, immutable: true }),
+	updatedAt: field.string({ required: true, input: false }),
 } as const;
 
 export const toolResultFields = {
@@ -209,31 +205,6 @@ export const conversationBindingFields = {
 	updatedAt: field.string({ required: true }),
 } as const;
 
-export const channelEndpointFields = {
-	id: field.string({ required: true, unique: true }),
-	provider: field.string({ required: true, index: true }),
-	tenantId: field.string({ required: true, index: true }),
-	endpointKey: field.string({ required: true, index: true }),
-	mode: field.enum(channelEndpointModeValues, { required: true, index: true }),
-	status: field.enum(channelEndpointStatusValues, {
-		required: true,
-		index: true,
-	}),
-	externalId: field.string({ index: true }),
-	url: field.string(),
-	secretRef: field.string({ pii: "possible" }),
-	cursor: field.jsonValue({ pii: "possible" }),
-	metadata: field.jsonObject(),
-	lastError: field.jsonValue({ pii: "redacted" }),
-	validatedAt: field.string({ index: true }),
-	provisionedAt: field.string({ index: true }),
-	expiresAt: field.string({ index: true }),
-	lastReceivedAt: field.string({ index: true }),
-	lastPolledAt: field.string({ index: true }),
-	createdAt: field.string({ required: true }),
-	updatedAt: field.string({ required: true }),
-} as const;
-
 export const clawEntity = entity("claw", clawFields);
 export const threadEntity = entity("thread", threadFields);
 export const messageEntity = entity("message", messageFields);
@@ -244,10 +215,6 @@ export const conversationBindingEntity = entity(
 	"conversation_binding",
 	conversationBindingFields,
 );
-export const channelEndpointEntity = entity(
-	"channel_endpoint",
-	channelEndpointFields,
-);
 
 export const clawRecord = clawEntity.record;
 export const threadRecord = threadEntity.record;
@@ -256,7 +223,6 @@ export const toolCallRecord = toolCallEntity.record;
 export const toolResultRecord = toolResultEntity.record;
 export const checkpointRecord = checkpointEntity.record;
 export const conversationBindingRecord = conversationBindingEntity.record;
-export const channelEndpointRecord = channelEndpointEntity.record;
 
 export const createClawInputOptions = {
 	omit: ["status", "createdAt", "updatedAt"],
@@ -316,57 +282,6 @@ export const createConversationBindingInput = conversationBindingEntity.schema(
 	createConversationBindingInputOptions,
 );
 
-export const createChannelEndpointInputOptions = {
-	omit: ["createdAt", "updatedAt"],
-	optional: ["id", "status"],
-} as const;
-export const createChannelEndpointInput = channelEndpointEntity.schema(
-	createChannelEndpointInputOptions,
-);
-
-export const channelEndpointLookupInputOptions = {
-	pick: ["provider", "tenantId", "endpointKey"],
-} as const;
-export const channelEndpointLookupInput = channelEndpointEntity.schema(
-	channelEndpointLookupInputOptions,
-);
-
-export const updateChannelEndpointInputOptions = {
-	pick: [
-		"mode",
-		"status",
-		"externalId",
-		"url",
-		"secretRef",
-		"cursor",
-		"metadata",
-		"lastError",
-		"validatedAt",
-		"provisionedAt",
-		"expiresAt",
-		"lastReceivedAt",
-		"lastPolledAt",
-	],
-	optional: [
-		"mode",
-		"status",
-		"externalId",
-		"url",
-		"secretRef",
-		"cursor",
-		"metadata",
-		"lastError",
-		"validatedAt",
-		"provisionedAt",
-		"expiresAt",
-		"lastReceivedAt",
-		"lastPolledAt",
-	],
-} as const;
-export const updateChannelEndpointInput = channelEndpointEntity.schema(
-	updateChannelEndpointInputOptions,
-);
-
 export const clawsSchema = {
 	...clawEntity.storage,
 	...threadEntity.storage,
@@ -375,5 +290,4 @@ export const clawsSchema = {
 	...toolResultEntity.storage,
 	...checkpointEntity.storage,
 	...conversationBindingEntity.storage,
-	...channelEndpointEntity.storage,
 };

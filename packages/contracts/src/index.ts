@@ -16,11 +16,6 @@ export {
 // ── claws (conversational/agent-state domain) ────────────────────────────────
 export type {
 	AppendMessageInput,
-	ChannelEndpointLookup,
-	ChannelEndpointMode,
-	ChannelEndpointRecord,
-	ChannelEndpointStatus,
-	ChannelEndpointStore,
 	CheckpointKind,
 	CheckpointRecord,
 	CheckpointStore,
@@ -31,7 +26,6 @@ export type {
 	ConversationBindingLookup,
 	ConversationBindingRecord,
 	ConversationBindingStore,
-	CreateChannelEndpointInput,
 	CreateCheckpointInput,
 	CreateClawInput,
 	CreateConversationBindingInput,
@@ -53,18 +47,10 @@ export type {
 	ToolResultRecord,
 	ToolResultStatus,
 	ToolResultStore,
-	UpdateChannelEndpointByKeyInput,
-	UpdateChannelEndpointInput,
 	UpdateClawInput,
 } from "./claws/contracts";
 export {
 	appendMessageInput,
-	channelEndpointEntity,
-	channelEndpointFields,
-	channelEndpointLookupInput,
-	channelEndpointMode,
-	channelEndpointRecord,
-	channelEndpointStatus,
 	checkpointEntity,
 	checkpointFields,
 	checkpointKind,
@@ -77,7 +63,6 @@ export {
 	conversationBindingEntity,
 	conversationBindingFields,
 	conversationBindingRecord,
-	createChannelEndpointInput,
 	createCheckpointInput,
 	createClawInput,
 	createClawInputOptions,
@@ -103,7 +88,6 @@ export {
 	toolResultOutputMode,
 	toolResultRecord,
 	toolResultStatus,
-	updateChannelEndpointInput,
 } from "./claws/schema";
 
 // ── primitives: json + the entity schema DSL ─────────────────────────────────
@@ -135,6 +119,7 @@ export type {
 	EntityRecord,
 	EntitySchemaInput,
 	EntitySchemaOptions,
+	EntityUpdateInput,
 } from "./entity";
 export { entity, field } from "./entity";
 export type { Event, EventSink } from "./events";

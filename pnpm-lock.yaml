@@ -23,9 +23,9 @@ importers:
 
   packages/adapter/core:
     dependencies:
-      '@euroclaw/core':
+      '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../contracts
       '@euroclaw/errors':
         specifier: workspace:*
         version: link:../../errors
@@ -45,27 +45,20 @@ importers:
         specifier: workspace:*
         version: link:../../euroclaw
 
-  packages/channel/telegram:
+  packages/contracts:
     dependencies:
-      '@euroclaw/core':
+      '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../errors
       arktype:
         specifier: 2.2.0
         version: 2.2.0
-      euroclaw:
-        specifier: workspace:*
-        version: link:../../euroclaw
-    devDependencies:
-      '@euroclaw/storage-core':
-        specifier: workspace:*
-        version: link:../../storage/core
-      '@euroclaw/storage-durable':
-        specifier: workspace:*
-        version: link:../../storage/durable
 
   packages/core:
     dependencies:
+      '@euroclaw/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@euroclaw/errors':
         specifier: workspace:*
         version: link:../errors
@@ -78,18 +71,18 @@ importers:
 
   packages/engines/core:
     dependencies:
-      '@euroclaw/core':
+      '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../contracts
       '@euroclaw/errors':
         specifier: workspace:*
         version: link:../../errors
 
   packages/engines/sql:
     dependencies:
-      '@euroclaw/core':
+      '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../contracts
       '@euroclaw/engine-core':
         specifier: workspace:*
         version: link:../core
@@ -113,9 +106,9 @@ importers:
 
   packages/euroclaw:
     dependencies:
-      '@euroclaw/core':
+      '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../core
+        version: link:../contracts
       '@euroclaw/engine-core':
         specifier: workspace:*
         version: link:../engines/core
@@ -132,6 +125,12 @@ importers:
         specifier: 2.2.0
         version: 2.2.0
     devDependencies:
+      '@euroclaw/core':
+        specifier: workspace:*
+        version: link:../core
+      '@euroclaw/skills':
+        specifier: workspace:*
+        version: link:../plugins/skills
       '@euroclaw/storage-core':
         specifier: workspace:*
         version: link:../storage/core
@@ -148,47 +147,115 @@ importers:
         specifier: workspace:*
         version: link:../../policy/core
 
-  packages/policy/better-auth:
+  packages/plugins/channels:
     dependencies:
+      '@euroclaw/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@euroclaw/errors':
+        specifier: workspace:*
+        version: link:../../errors
+      '@euroclaw/storage-core':
+        specifier: workspace:*
+        version: link:../../storage/core
+      '@noble/hashes':
+        specifier: 2.2.0
+        version: 2.2.0
+      arktype:
+        specifier: 2.2.0
+        version: 2.2.0
+      euroclaw:
+        specifier: workspace:*
+        version: link:../../euroclaw
+    devDependencies:
       '@euroclaw/core':
         specifier: workspace:*
         version: link:../../core
+      '@euroclaw/storage-durable':
+        specifier: workspace:*
+        version: link:../../storage/durable
+      ai:
+        specifier: 5.0.203
+        version: 5.0.203(zod@4.4.3)
+
+  packages/plugins/skills:
+    dependencies:
+      '@euroclaw/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
+      '@euroclaw/errors':
+        specifier: workspace:*
+        version: link:../../errors
+      '@euroclaw/storage-core':
+        specifier: workspace:*
+        version: link:../../storage/core
+      '@noble/hashes':
+        specifier: 2.2.0
+        version: 2.2.0
+      arktype:
+        specifier: 2.2.0
+        version: 2.2.0
+    devDependencies:
+      '@euroclaw/core':
+        specifier: workspace:*
+        version: link:../../core
+
+  packages/policy/better-auth:
+    dependencies:
+      '@euroclaw/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
       '@euroclaw/policy-core':
         specifier: workspace:*
         version: link:../core
       better-auth:
         specifier: 1.6.19
         version: 1.6.19(@opentelemetry/api@1.9.0)(@prisma/client@6.19.3(prisma@6.19.3(typescript@6.0.3))(typescript@6.0.3))(better-sqlite3@12.11.1)(drizzle-orm@0.45.2(@opentelemetry/api@1.9.0)(@prisma/client@6.19.3(prisma@6.19.3(typescript@6.0.3))(typescript@6.0.3))(@types/better-sqlite3@7.6.13)(better-sqlite3@12.11.1)(kysely@0.29.2)(prisma@6.19.3(typescript@6.0.3)))(mongodb@6.21.0)(prisma@6.19.3(typescript@6.0.3))(vitest@4.1.8(@opentelemetry/api@1.9.0)(@types/node@25.9.3)(msw@2.14.6(@types/node@25.9.3)(typescript@6.0.3))(vite@8.0.16(@types/node@25.9.3)(jiti@2.7.0)))
+    devDependencies:
+      '@euroclaw/core':
+        specifier: workspace:*
+        version: link:../../core
 
   packages/policy/cedar:
     dependencies:
       '@cedar-policy/cedar-wasm':
         specifier: 4.11.1
         version: 4.11.1
-      '@euroclaw/core':
+      '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../contracts
       '@euroclaw/errors':
         specifier: workspace:*
         version: link:../../errors
       '@euroclaw/policy-core':
         specifier: workspace:*
         version: link:../core
-
-  packages/policy/core:
-    dependencies:
+    devDependencies:
       '@euroclaw/core':
         specifier: workspace:*
         version: link:../../core
+
+  packages/policy/core:
+    dependencies:
+      '@euroclaw/contracts':
+        specifier: workspace:*
+        version: link:../../contracts
       '@euroclaw/errors':
         specifier: workspace:*
         version: link:../../errors
       arktype:
         specifier: 2.2.0
         version: 2.2.0
+    devDependencies:
+      '@euroclaw/core':
+        specifier: workspace:*
+        version: link:../../core
 
   packages/runtime:
     dependencies:
+      '@euroclaw/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       '@euroclaw/core':
         specifier: workspace:*
         version: link:../core
@@ -244,9 +311,9 @@ importers:
 
   packages/storage/durable:
     dependencies:
-      '@euroclaw/core':
+      '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../contracts
       '@euroclaw/errors':
         specifier: workspace:*
         version: link:../../errors

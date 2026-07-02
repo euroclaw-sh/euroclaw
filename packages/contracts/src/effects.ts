@@ -24,10 +24,12 @@ export const effectCompensation = type({
 export type EffectCompensation = typeof effectCompensation.infer;
 
 export const effectFields = {
-	id: field.string({ required: true, unique: true }),
+	// The effect's identity — what tool ran with what input — is fixed at create; only its execution
+	// state (status, lease, output/error, compensation) changes.
+	id: field.string({ required: true, unique: true, immutable: true }),
 	status: field.enum(effectStatusValues, { required: true, index: true }),
-	toolName: field.string({ required: true, index: true }),
-	inputHash: field.string({ required: true, index: true }),
+	toolName: field.string({ required: true, index: true, immutable: true }),
+	inputHash: field.string({ required: true, index: true, immutable: true }),
 	output: field.jsonValue({ pii: "redacted" }),
 	error: field.jsonValue({ pii: "redacted" }),
 	compensation: field.jsonObject<EffectCompensation>({
@@ -36,7 +38,7 @@ export const effectFields = {
 	}),
 	compensationEffectId: field.string(),
 	leaseExpiresAt: field.string({ index: true }),
-	createdAt: field.string({ required: true }),
+	createdAt: field.string({ required: true, immutable: true }),
 	updatedAt: field.string({ required: true }),
 } as const;
 

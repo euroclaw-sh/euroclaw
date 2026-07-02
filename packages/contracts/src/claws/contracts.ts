@@ -1,16 +1,15 @@
-import type { EntityRecord, EntitySchemaInput } from "../entity";
+import type {
+	EntityRecord,
+	EntitySchemaInput,
+	EntityUpdateInput,
+} from "../entity";
 import type {
 	appendMessageInputOptions,
-	channelEndpointFields,
-	channelEndpointLookupInputOptions,
-	channelEndpointModeValues,
-	channelEndpointStatusValues,
 	checkpointFields,
 	checkpointKindValues,
 	clawFields,
 	clawStatusValues,
 	conversationBindingFields,
-	createChannelEndpointInputOptions,
 	createCheckpointInputOptions,
 	createClawInputOptions,
 	createConversationBindingInputOptions,
@@ -27,7 +26,6 @@ import type {
 	toolResultFields,
 	toolResultOutputModeValues,
 	toolResultStatusValues,
-	updateChannelEndpointInputOptions,
 } from "./schema";
 
 export type ClawStatus = (typeof clawStatusValues)[number];
@@ -38,9 +36,6 @@ export type ToolCallStatus = (typeof toolCallStatusValues)[number];
 export type ToolResultStatus = (typeof toolResultStatusValues)[number];
 export type ToolResultOutputMode = (typeof toolResultOutputModeValues)[number];
 export type CheckpointKind = (typeof checkpointKindValues)[number];
-export type ChannelEndpointMode = (typeof channelEndpointModeValues)[number];
-export type ChannelEndpointStatus =
-	(typeof channelEndpointStatusValues)[number];
 
 export type ClawRecord = EntityRecord<typeof clawFields>;
 export type ThreadRecord = EntityRecord<typeof threadFields>;
@@ -51,7 +46,6 @@ export type CheckpointRecord = EntityRecord<typeof checkpointFields>;
 export type ConversationBindingRecord = EntityRecord<
 	typeof conversationBindingFields
 >;
-export type ChannelEndpointRecord = EntityRecord<typeof channelEndpointFields>;
 
 export type CreateClawInput = EntitySchemaInput<
 	typeof clawFields,
@@ -81,32 +75,10 @@ export type CreateConversationBindingInput = EntitySchemaInput<
 	typeof conversationBindingFields,
 	typeof createConversationBindingInputOptions
 >;
-export type CreateChannelEndpointInput = EntitySchemaInput<
-	typeof channelEndpointFields,
-	typeof createChannelEndpointInputOptions
->;
-export type ChannelEndpointLookup = EntitySchemaInput<
-	typeof channelEndpointFields,
-	typeof channelEndpointLookupInputOptions
->;
-export type UpdateChannelEndpointInput = EntitySchemaInput<
-	typeof channelEndpointFields,
-	typeof updateChannelEndpointInputOptions
->;
-export type UpdateChannelEndpointByKeyInput = ChannelEndpointLookup & {
-	patch: UpdateChannelEndpointInput;
-};
 
-export type UpdateClawInput = Partial<
-	Pick<
-		ClawRecord,
-		"status" | "name" | "instructions" | "context" | "memoryNamespace"
-	>
->;
+export type UpdateClawInput = EntityUpdateInput<typeof clawFields>;
 
-export type ToolCallStatusPatch = Partial<
-	Pick<ToolCallRecord, "status" | "approvalId" | "effectId" | "updatedAt">
->;
+export type ToolCallStatusPatch = EntityUpdateInput<typeof toolCallFields>;
 
 export type ClawStore = {
 	create: (input: CreateClawInput) => Promise<ClawRecord>;
@@ -177,18 +149,6 @@ export type ConversationBindingStore = {
 	listForThread: (threadId: string) => Promise<ConversationBindingRecord[]>;
 };
 
-export type ChannelEndpointStore = {
-	create: (input: CreateChannelEndpointInput) => Promise<ChannelEndpointRecord>;
-	upsert: (input: CreateChannelEndpointInput) => Promise<ChannelEndpointRecord>;
-	get: (id: string) => Promise<ChannelEndpointRecord | null>;
-	getByKey: (
-		input: ChannelEndpointLookup,
-	) => Promise<ChannelEndpointRecord | null>;
-	updateByKey: (
-		input: UpdateChannelEndpointByKeyInput,
-	) => Promise<ChannelEndpointRecord | null>;
-};
-
 export type ClawsStore = {
 	claws: ClawStore;
 	threads: ThreadStore;
@@ -197,5 +157,4 @@ export type ClawsStore = {
 	toolResults: ToolResultStore;
 	checkpoints: CheckpointStore;
 	conversationBindings: ConversationBindingStore;
-	channelEndpoints: ChannelEndpointStore;
 };

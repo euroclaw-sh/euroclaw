@@ -1,25 +1,19 @@
 import {
 	type AppendMessageInput,
 	appendMessageInput,
-	type ChannelEndpointLookup,
-	type ChannelEndpointRecord,
 	type CheckpointRecord,
 	type ClawRecord,
 	type ClawsStore,
 	type ConversationBindingRecord,
-	type CreateChannelEndpointInput,
 	type CreateCheckpointInput,
 	type CreateConversationBindingInput,
 	type CreateThreadInput,
 	type CreateToolCallInput,
 	type CreateToolResultInput,
-	channelEndpointLookupInput,
-	channelEndpointRecord,
 	checkpointRecord,
 	clawFields,
 	clawsSchema,
 	conversationBindingRecord,
-	createChannelEndpointInput,
 	createCheckpointInput,
 	createClawInputOptions,
 	createConversationBindingInput,
@@ -36,9 +30,6 @@ import {
 	threadRecord,
 	toolCallRecord,
 	toolResultRecord,
-	type UpdateChannelEndpointByKeyInput,
-	type UpdateChannelEndpointInput,
-	updateChannelEndpointInput,
 } from "@euroclaw/contracts";
 import {
 	configurationError,
@@ -169,77 +160,6 @@ function assertConversationBindingRecord(
 	return valid;
 }
 
-function assertCreateChannelEndpointInput(
-	input: unknown,
-): CreateChannelEndpointInput {
-	const valid = createChannelEndpointInput(input);
-	if (valid instanceof type.errors) {
-		throw validationError(
-			"create channel endpoint input invalid",
-			valid.summary,
-		);
-	}
-	return valid;
-}
-
-function assertChannelEndpointLookup(input: unknown): ChannelEndpointLookup {
-	const valid = channelEndpointLookupInput(input);
-	if (valid instanceof type.errors) {
-		throw validationError("channel endpoint lookup invalid", valid.summary);
-	}
-	return valid;
-}
-
-function assertUpdateChannelEndpointInput(
-	input: unknown,
-): UpdateChannelEndpointInput {
-	const valid = updateChannelEndpointInput(input);
-	if (valid instanceof type.errors) {
-		throw validationError(
-			"update channel endpoint input invalid",
-			valid.summary,
-		);
-	}
-	return valid;
-}
-
-function assertChannelEndpointRecord(input: unknown): ChannelEndpointRecord {
-	const valid = channelEndpointRecord(input);
-	if (valid instanceof type.errors) {
-		throw validationError("channel endpoint record invalid", valid.summary);
-	}
-	return valid;
-}
-
-function channelEndpointWhere(input: ChannelEndpointLookup): Where[] {
-	return [
-		{ field: "provider", value: input.provider },
-		{ field: "tenantId", value: input.tenantId, connector: "AND" },
-		{ field: "endpointKey", value: input.endpointKey, connector: "AND" },
-	];
-}
-
-function channelEndpointPatchFromCreate(
-	input: CreateChannelEndpointInput,
-): UpdateChannelEndpointInput {
-	const patch: UpdateChannelEndpointInput = { mode: input.mode };
-	if (input.status !== undefined) patch.status = input.status;
-	if (input.externalId !== undefined) patch.externalId = input.externalId;
-	if (input.url !== undefined) patch.url = input.url;
-	if (input.secretRef !== undefined) patch.secretRef = input.secretRef;
-	if (input.cursor !== undefined) patch.cursor = input.cursor;
-	if (input.metadata !== undefined) patch.metadata = input.metadata;
-	if (input.lastError !== undefined) patch.lastError = input.lastError;
-	if (input.validatedAt !== undefined) patch.validatedAt = input.validatedAt;
-	if (input.provisionedAt !== undefined)
-		patch.provisionedAt = input.provisionedAt;
-	if (input.expiresAt !== undefined) patch.expiresAt = input.expiresAt;
-	if (input.lastReceivedAt !== undefined)
-		patch.lastReceivedAt = input.lastReceivedAt;
-	if (input.lastPolledAt !== undefined) patch.lastPolledAt = input.lastPolledAt;
-	return patch;
-}
-
 export function createClawsStore(
 	adapter: Adapter,
 	options: ClawsStoreOptions = {},
@@ -274,82 +194,6 @@ export function createClawsStore(
 	};
 
 	return {
-		channelEndpoints: {
-			async create(input) {
-				const valid = assertCreateChannelEndpointInput(input);
-				const ts = now();
-				const record = assertChannelEndpointRecord({
-					id: valid.id ?? newId(),
-					provider: valid.provider,
-					tenantId: valid.tenantId,
-					endpointKey: valid.endpointKey,
-					mode: valid.mode,
-					status: valid.status ?? "pending",
-					externalId: valid.externalId,
-					url: valid.url,
-					secretRef: valid.secretRef,
-					cursor: valid.cursor,
-					metadata: valid.metadata,
-					lastError: valid.lastError,
-					validatedAt: valid.validatedAt,
-					provisionedAt: valid.provisionedAt,
-					expiresAt: valid.expiresAt,
-					lastReceivedAt: valid.lastReceivedAt,
-					lastPolledAt: valid.lastPolledAt,
-					createdAt: ts,
-					updatedAt: ts,
-				});
-				await db.create({ model: "channel_endpoint", data: record });
-				return record;
-			},
-
-			async upsert(input) {
-				const valid = assertCreateChannelEndpointInput(input);
-				const lookup = {
-					endpointKey: valid.endpointKey,
-					provider: valid.provider,
-					tenantId: valid.tenantId,
-				};
-				const existing = await this.getByKey(lookup);
-				if (!existing) return this.create(valid);
-				const updated = await this.updateByKey({
-					...lookup,
-					patch: channelEndpointPatchFromCreate(valid),
-				});
-				return updated ?? existing;
-			},
-
-			get(id) {
-				return db.findOne<ChannelEndpointRecord>({
-					model: "channel_endpoint",
-					where: [{ field: "id", value: id }],
-				});
-			},
-
-			getByKey(input) {
-				const lookup = assertChannelEndpointLookup(input);
-				return db.findOne<ChannelEndpointRecord>({
-					model: "channel_endpoint",
-					where: channelEndpointWhere(lookup),
-				});
-			},
-
-			async updateByKey(input: UpdateChannelEndpointByKeyInput) {
-				const lookup = assertChannelEndpointLookup({
-					endpointKey: input.endpointKey,
-					provider: input.provider,
-					tenantId: input.tenantId,
-				});
-				const patch = assertUpdateChannelEndpointInput(input.patch);
-				const row = await db.update<ChannelEndpointRecord>({
-					model: "channel_endpoint",
-					where: channelEndpointWhere(lookup),
-					update: { ...patch, updatedAt: now() },
-				});
-				return row ? assertChannelEndpointRecord(row) : null;
-			},
-		},
-
 		claws: {
 			async create(input) {
 				const valid = assertCreateClawInput(input);
@@ -376,19 +220,12 @@ export function createClawsStore(
 			},
 
 			async update(id, patch) {
-				const update: Record<string, unknown> = { updatedAt: now() };
-				if (patch.status !== undefined) update.status = patch.status;
-				if (patch.name !== undefined) update.name = patch.name;
-				if (patch.instructions !== undefined)
-					update.instructions = patch.instructions;
-				if (patch.context !== undefined) update.context = patch.context;
-				if (patch.memoryNamespace !== undefined)
-					update.memoryNamespace = patch.memoryNamespace;
-
+				// schemaAdapter drops undefined fields, so the patch flows straight through; the store
+				// owns updatedAt (the caller can't set it — it's input:false).
 				const row = await db.update<ClawRecord>({
 					model: "claw",
 					where: [{ field: "id", value: id }],
-					update,
+					update: { ...patch, updatedAt: now() },
 				});
 				return row ? assertClawRecord(row) : null;
 			},
@@ -594,18 +431,10 @@ export function createClawsStore(
 			},
 
 			async updateStatus(id, patch) {
-				const update: Record<string, unknown> = {
-					updatedAt: patch.updatedAt ?? now(),
-				};
-				if (patch.status !== undefined) update.status = patch.status;
-				if (patch.approvalId !== undefined)
-					update.approvalId = patch.approvalId;
-				if (patch.effectId !== undefined) update.effectId = patch.effectId;
-
 				const row = await db.update<ToolCallRecord>({
 					model: "tool_call",
 					where: [{ field: "id", value: id }],
-					update,
+					update: { ...patch, updatedAt: now() },
 				});
 				return row ? assertToolCallRecord(row) : null;
 			},

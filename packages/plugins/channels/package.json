@@ -1,0 +1,50 @@
+{
+	"name": "@euroclaw/channels",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "Self-contained channels plugin for euroclaw: the Channel adapter contract, the shared inbound/poll dispatch engine, the endpoint registry (code + database), and first-party channel providers.",
+	"license": "MIT",
+	"author": "Konstantin Ponomarev",
+	"homepage": "https://github.com/euroclaw-sh/euroclaw#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/euroclaw-sh/euroclaw.git",
+		"directory": "packages/plugins/channels"
+	},
+	"bugs": {
+		"url": "https://github.com/euroclaw-sh/euroclaw/issues"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "tsc",
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@euroclaw/contracts": "workspace:*",
+		"@euroclaw/errors": "workspace:*",
+		"@euroclaw/storage-core": "workspace:*",
+		"@noble/hashes": "2.2.0",
+		"arktype": "2.2.0",
+		"euroclaw": "workspace:*"
+	},
+	"devDependencies": {
+		"@euroclaw/core": "workspace:*",
+		"@euroclaw/storage-durable": "workspace:*",
+		"ai": "5.0.203"
+	}
+}
