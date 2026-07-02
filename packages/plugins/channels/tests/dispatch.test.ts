@@ -96,6 +96,36 @@ describe("dispatch engine", () => {
 		expect(relayed).toEqual([]);
 	});
 
+	it("never rewrites a registered endpoint's mode from dispatch bookkeeping", async () => {
+		const store = createChannelEndpointsStore(memoryAdapter(), { now });
+		// registered as a poll endpoint; a webhook POST must not flip it out of the poll fan-out
+		await store.upsert({
+			provider: "fake",
+			tenantId: "tenant-1",
+			endpointKey: "default",
+			mode: "poll",
+			status: "validated",
+		});
+
+		const result = await dispatchWebhook({
+			claw: fakeClaw([]),
+			channel: fakeChannel(),
+			store,
+			endpointKey: "default",
+			request: { headers: { get: () => null }, rawBody: "hello" },
+			now,
+		});
+
+		expect(result.status).toBe(200);
+		const endpoint = await store.getByKey({
+			provider: "fake",
+			tenantId: "tenant-1",
+			endpointKey: "default",
+		});
+		expect(endpoint?.mode).toBe("poll"); // bookkeeping patched state, not the transport
+		expect(endpoint?.lastReceivedAt).toBe(now());
+	});
+
 	it("returns 404 for an endpoint that is neither declared in code nor in the database", async () => {
 		const store = createChannelEndpointsStore(memoryAdapter(), { now });
 		const result = await dispatchWebhook({

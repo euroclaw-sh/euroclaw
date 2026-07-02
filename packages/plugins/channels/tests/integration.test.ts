@@ -86,6 +86,21 @@ describe("channels ↔ euroclaw integration", () => {
 		).toMatchObject({ id: created.id });
 	});
 
+	it("rejects two channels for the same provider — webhook dispatch is by provider", () => {
+		expect(() =>
+			channels([
+				telegram({ tenantId: "tenant-a", client: fakeClient() }),
+				// distinct endpointKey so the per-endpoint dedup can't fire first — this exercises the
+				// provider-level guard (the second channel could never receive a webhook)
+				telegram({
+					tenantId: "tenant-b",
+					endpointKey: "other",
+					client: fakeClient(),
+				}),
+			]),
+		).toThrow(/duplicate channel provider/);
+	});
+
 	it("rejects a plugin schema that redefines a core claw column at createClaw", () => {
 		// sanity that the collision guard still fires for genuine core-column clashes
 		expect(() =>

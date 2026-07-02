@@ -129,7 +129,11 @@ export interface Channel {
 	};
 	/** Extract the endpoint key from a request (default: the route `:endpointKey`). Fan-in overrides. */
 	identify?: (request: InboundRequest) => string | undefined;
-	/** Authenticate an inbound request against the endpoint BEFORE its body is trusted. */
+	/**
+	 * Authenticate an inbound request against the endpoint BEFORE its body is trusted. Prefer failing
+	 * closed — an unverified webhook relays attacker input straight into a model run (telegram checks
+	 * the row's webhookSecret, then code config, and refuses when neither is set).
+	 */
 	verify?: (input: {
 		request: InboundRequest;
 		endpoint: EndpointContext;

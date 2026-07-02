@@ -23,12 +23,14 @@ export async function resolveEndpoint(input: {
 		tenantId: channel.tenantId,
 		endpointKey,
 	});
-	if (!code && !record) return null;
+	// mode is required on both sources, so no mode ⟺ neither declared in code nor registered in the DB.
+	const mode = record?.mode ?? code?.mode;
+	if (mode === undefined) return null;
 	return {
 		provider: channel.provider,
 		tenantId: channel.tenantId,
 		endpointKey,
-		mode: record?.mode ?? code?.mode ?? "webhook",
+		mode,
 		record: record ?? null,
 	};
 }

@@ -85,18 +85,29 @@ function contextAdapter(context: unknown): Adapter | undefined {
 	return value as Adapter;
 }
 
-function assertUniqueEndpoints(channels: readonly Channel[]): void {
-	const seen = new Set<string>();
+function assertUniqueChannels(channels: readonly Channel[]): void {
+	const providers = new Set<string>();
+	const endpoints = new Set<string>();
 	for (const channel of channels) {
+		// The webhook route dispatches by `:provider` alone, so a second channel of the same provider
+		// could never receive a webhook — refuse loudly instead of letting the last one silently win.
+		if (providers.has(channel.provider)) {
+			throw configurationError("duplicate channel provider", {
+				provider: channel.provider,
+				reason:
+					"webhook dispatch is by provider — register one channel per provider",
+			});
+		}
+		providers.add(channel.provider);
 		for (const endpoint of channel.codeEndpoints) {
 			const key = `${channel.provider}:${endpoint.key}`;
-			if (seen.has(key)) {
+			if (endpoints.has(key)) {
 				throw configurationError("duplicate channel endpoint", {
 					provider: channel.provider,
 					endpointKey: endpoint.key,
 				});
 			}
-			seen.add(key);
+			endpoints.add(key);
 		}
 	}
 }
@@ -133,8 +144,9 @@ function buildChannelsPlugin(
 	options: ChannelsPluginOptions,
 	store: ChannelEndpointStore | undefined,
 ): ChannelsPlugin {
-	assertUniqueEndpoints(list);
+	assertUniqueChannels(list);
 	const now = options.now ?? (() => new Date().toISOString());
+	// Safe to key by provider: assertUniqueChannels guarantees one channel per provider.
 	const byProvider = new Map(
 		list.map((channel) => [channel.provider, channel]),
 	);

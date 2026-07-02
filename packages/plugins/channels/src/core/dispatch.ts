@@ -2,10 +2,12 @@ import { errorMessage } from "@euroclaw/errors";
 import type { Claw } from "euroclaw";
 import type {
 	Channel,
+	ChannelEndpointMode,
 	ChannelEndpointStore,
 	EndpointContext,
 	InboundMessage,
 	InboundRequest,
+	UpdateChannelEndpointInput,
 } from "./contracts";
 import { resolveEndpoint } from "./resolve";
 
@@ -13,6 +15,29 @@ export type ChannelDispatchResult = {
 	status: number;
 	body: unknown;
 };
+
+/**
+ * Persist post-dispatch endpoint state. An existing row gets a plain patch — never `mode`, so inbound
+ * traffic can't flip a registered endpoint's transport (a webhook POST to a poll-registered endpoint
+ * would otherwise silently drop it from the poll fan-out). Only first contact creates the row, with
+ * the mode of the transport that just ran.
+ */
+function persistEndpointState(input: {
+	store: ChannelEndpointStore;
+	endpoint: EndpointContext;
+	mode: ChannelEndpointMode;
+	patch: UpdateChannelEndpointInput;
+}): Promise<unknown> {
+	const { store, endpoint, patch } = input;
+	const key = {
+		provider: endpoint.provider,
+		tenantId: endpoint.tenantId,
+		endpointKey: endpoint.endpointKey,
+	};
+	return endpoint.record
+		? store.updateByKey({ ...key, patch })
+		: store.upsert({ ...key, mode: input.mode, ...patch });
+}
 
 /**
  * The shared half every provider reuses: bind the external conversation to a claw/thread (core), relay
@@ -81,14 +106,15 @@ export async function dispatchWebhook(input: {
 	for (const message of messages) {
 		await handleInbound({ claw, channel, endpoint, message });
 	}
-	await store.upsert({
-		provider: endpoint.provider,
-		tenantId: endpoint.tenantId,
-		endpointKey: endpoint.endpointKey,
+	await persistEndpointState({
+		store,
+		endpoint,
 		mode: "webhook",
-		status: "validated",
-		lastError: null,
-		lastReceivedAt: input.now(),
+		patch: {
+			status: "validated",
+			lastError: null,
+			lastReceivedAt: input.now(),
+		},
 	});
 	return {
 		status: 200,
@@ -122,26 +148,28 @@ export async function pollEndpoint(input: {
 			await handleInbound({ claw, channel, endpoint, message });
 			processed += 1;
 		}
-		await store.upsert({
-			provider: endpoint.provider,
-			tenantId: endpoint.tenantId,
-			endpointKey: endpoint.endpointKey,
+		await persistEndpointState({
+			store,
+			endpoint,
 			mode: "poll",
-			status: "validated",
-			cursor: result.cursor,
-			lastError: null,
-			lastPolledAt: input.now(),
+			patch: {
+				status: "validated",
+				cursor: result.cursor,
+				lastError: null,
+				lastPolledAt: input.now(),
+			},
 		});
 		return { processed };
 	} catch (error) {
-		await store.upsert({
-			provider: endpoint.provider,
-			tenantId: endpoint.tenantId,
-			endpointKey: endpoint.endpointKey,
+		await persistEndpointState({
+			store,
+			endpoint,
 			mode: "poll",
-			status: "error",
-			lastError: { message: errorMessage(error) },
-			lastPolledAt: input.now(),
+			patch: {
+				status: "error",
+				lastError: { message: errorMessage(error) },
+				lastPolledAt: input.now(),
+			},
 		});
 		throw error;
 	}

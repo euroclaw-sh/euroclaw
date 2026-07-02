@@ -1,5 +1,6 @@
 import {
 	configurationError,
+	errorMessage,
 	stateError,
 	validationError,
 } from "@euroclaw/errors";
@@ -176,16 +177,35 @@ export function telegram<const Config extends TelegramConfig>(
 		// Phantom-ish marker read by channels() at the type level; its runtime value tracks the mode.
 		$poll: (mode === "poll") as TelegramPoll<Config>,
 
-		verify({ request }) {
-			const secret = config.webhook?.secret;
-			if (!secret) return true;
+		verify({ request, endpoint }) {
+			// Per-endpoint secret (a runtime-registered row's webhookSecret) wins over the channel-level
+			// code config. No secret at all fails CLOSED — an open webhook would relay attacker text
+			// straight into a model run — and loudly: a missing secret is a setup gap, not a bad credential.
+			const secret = endpoint.record?.webhookSecret ?? config.webhook?.secret;
+			if (!secret) {
+				throw configurationError("telegram webhook endpoint has no secret", {
+					endpointKey: endpoint.endpointKey,
+					reason:
+						"set webhook.secret in code or webhookSecret on the endpoint row (Bot API secret_token)",
+				});
+			}
 			const headerName =
 				config.webhook?.headerName ?? "x-telegram-bot-api-secret-token";
 			return request.headers.get(headerName) === secret;
 		},
 
 		parseInbound({ request }) {
-			const update = parseUpdate(JSON.parse(request.rawBody));
+			let body: unknown;
+			try {
+				body = JSON.parse(request.rawBody);
+			} catch (err) {
+				// a validation error, not a raw SyntaxError — junk bytes are the caller's fault, not a crash
+				throw validationError(
+					"telegram webhook body invalid JSON",
+					errorMessage(err),
+				);
+			}
+			const update = parseUpdate(body);
 			const message = inboundFrom(update);
 			return message ? [message] : [];
 		},

@@ -4,7 +4,8 @@ import {
 	schemaAdapter,
 	type Where,
 } from "@euroclaw/storage-core";
-import { bytesToHex, randomBytes } from "@noble/hashes/utils.js";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import { type } from "arktype";
 import type {
 	ChannelEndpointListFilter,
@@ -28,7 +29,25 @@ export type ChannelEndpointStoreOptions = {
 	now?: () => string;
 };
 
-const newId = (): string => bytesToHex(randomBytes(16));
+/**
+ * The endpoint id IS the hash of its natural key, so (provider, tenantId, endpointKey) uniqueness
+ * rides the primary key — concurrent upserts of the same key collide on the id instead of creating
+ * twin rows — and every by-key operation is a primary-key access (engine-sql's idempotency-id
+ * precedent).
+ */
+function channelEndpointId(key: ChannelEndpointLookup): string {
+	return bytesToHex(
+		sha256(
+			utf8ToBytes(
+				JSON.stringify({
+					provider: key.provider,
+					tenantId: key.tenantId,
+					endpointKey: key.endpointKey,
+				}),
+			),
+		),
+	);
+}
 
 function assertCreateChannelEndpointInput(
 	input: unknown,
@@ -72,14 +91,6 @@ function assertChannelEndpointRecord(input: unknown): ChannelEndpointRecord {
 	return valid;
 }
 
-function channelEndpointWhere(input: ChannelEndpointLookup): Where[] {
-	return [
-		{ field: "provider", value: input.provider },
-		{ field: "tenantId", value: input.tenantId, connector: "AND" },
-		{ field: "endpointKey", value: input.endpointKey, connector: "AND" },
-	];
-}
-
 function channelEndpointListWhere(filter: ChannelEndpointListFilter): Where[] {
 	const where: Where[] = [];
 	const add = (fieldName: string, value: string): void => {
@@ -113,23 +124,9 @@ export function createChannelEndpointsStore(
 			const valid = assertCreateChannelEndpointInput(input);
 			const ts = now();
 			const record = assertChannelEndpointRecord({
-				id: valid.id ?? newId(),
-				provider: valid.provider,
-				tenantId: valid.tenantId,
-				endpointKey: valid.endpointKey,
-				mode: valid.mode,
+				...valid,
+				id: channelEndpointId(valid),
 				status: valid.status ?? "pending",
-				externalId: valid.externalId,
-				url: valid.url,
-				secret: valid.secret,
-				cursor: valid.cursor,
-				metadata: valid.metadata,
-				lastError: valid.lastError,
-				validatedAt: valid.validatedAt,
-				provisionedAt: valid.provisionedAt,
-				expiresAt: valid.expiresAt,
-				lastReceivedAt: valid.lastReceivedAt,
-				lastPolledAt: valid.lastPolledAt,
 				createdAt: ts,
 				updatedAt: ts,
 			});
@@ -139,12 +136,22 @@ export function createChannelEndpointsStore(
 
 		async upsert(input) {
 			const valid = assertCreateChannelEndpointInput(input);
-			const { id, provider, tenantId, endpointKey, ...patch } = valid;
+			const { provider, tenantId, endpointKey, ...patch } = valid;
 			const lookup = { provider, tenantId, endpointKey };
 			const existing = await this.getByKey(lookup);
-			if (!existing) return this.create(valid);
+			if (!existing) {
+				try {
+					return await this.create(valid);
+				} catch (err) {
+					// create raced another writer onto the same natural key — its id is the key's hash, so
+					// the loser hits the primary-key conflict here; fall through to patching the winner's row.
+					const raced = await this.updateByKey({ ...lookup, patch });
+					if (raced) return raced;
+					throw err;
+				}
+			}
 			// schemaAdapter.update omits undefined fields, so the create's mutable fields patch only what
-			// was provided — no per-field undefined guarding needed. `id` is destructured off (not updatable).
+			// was provided — no per-field undefined guarding needed.
 			return (await this.updateByKey({ ...lookup, patch })) ?? existing;
 		},
 
@@ -157,10 +164,7 @@ export function createChannelEndpointsStore(
 
 		getByKey(input) {
 			const lookup = assertChannelEndpointLookup(input);
-			return db.findOne<ChannelEndpointRecord>({
-				model: "channel_endpoint",
-				where: channelEndpointWhere(lookup),
-			});
+			return this.get(channelEndpointId(lookup));
 		},
 
 		async updateByKey(input: UpdateChannelEndpointByKeyInput) {
@@ -172,7 +176,7 @@ export function createChannelEndpointsStore(
 			const patch = assertUpdateChannelEndpointInput(input.patch);
 			const row = await db.update<ChannelEndpointRecord>({
 				model: "channel_endpoint",
-				where: channelEndpointWhere(lookup),
+				where: [{ field: "id", value: channelEndpointId(lookup) }],
 				update: { ...patch, updatedAt: now() },
 			});
 			return row ? assertChannelEndpointRecord(row) : null;

@@ -19,7 +19,8 @@ export const channelEndpointStatusValues = [
 export const channelEndpointFields = {
 	// The (provider, tenantId, endpointKey) natural key + id are the immutable identity — immutable:true
 	// so an update can never change them (enforced at the storage layer) and they drop out of the
-	// derived update input.
+	// derived update input. The id is derived by the store as the hash of the natural key, so the
+	// tuple's uniqueness rides the primary key (engine-sql's idempotency-id precedent).
 	id: field.string({ required: true, unique: true, immutable: true }),
 	provider: field.string({ required: true, index: true, immutable: true }),
 	tenantId: field.string({ required: true, index: true, immutable: true }),
@@ -36,6 +37,10 @@ export const channelEndpointFields = {
 	// at-rest protection is the host's database concern. Code endpoints keep their client in memory and
 	// leave this empty.
 	secret: field.string({ pii: "redacted" }),
+	// The INBOUND counterpart of `secret`: what a provider's `verify` checks an incoming webhook against
+	// (e.g. telegram's secret_token). Without it, a runtime-registered webhook endpoint would have no
+	// way to be authenticated — its `secret` is the egress credential, never presented by the caller.
+	webhookSecret: field.string({ pii: "redacted" }),
 	cursor: field.jsonValue({ pii: "possible" }),
 	metadata: field.jsonObject(),
 	lastError: field.jsonValue({ pii: "redacted" }),
@@ -57,9 +62,11 @@ export const channelEndpointEntity = entity(
 
 export const channelEndpointRecord = channelEndpointEntity.record;
 
+// `id` is omitted, not optional: the store derives it from the natural key, so a caller-picked id
+// could never disagree with the tuple it hashes.
 export const createChannelEndpointInputOptions = {
-	omit: ["createdAt", "updatedAt"],
-	optional: ["id", "status"],
+	omit: ["id", "createdAt", "updatedAt"],
+	optional: ["status"],
 } as const;
 export const createChannelEndpointInput = channelEndpointEntity.schema(
 	createChannelEndpointInputOptions,

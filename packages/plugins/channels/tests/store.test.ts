@@ -47,26 +47,56 @@ describe("createChannelEndpointsStore", () => {
 		});
 	});
 
-	it("persists the credential and cursor as real columns (queryable, not a JSON blob)", async () => {
+	it("persists the credentials and cursor as real columns (queryable, not a JSON blob)", async () => {
 		const adapter = memoryAdapter();
 		const endpoints = createChannelEndpointsStore(adapter, {
 			now: () => "2026-01-01T00:00:00.000Z",
 		});
-		await endpoints.create({
-			id: "endpoint-1",
+		const created = await endpoints.create({
 			provider: "telegram",
 			tenantId: "tenant-1",
 			endpointKey: "main",
 			mode: "webhook",
 			secret: "bot-token-123",
+			webhookSecret: "inbound-456",
 		});
 		const raw = await adapter.findOne<Record<string, unknown>>({
 			model: "channel_endpoint",
-			where: [{ field: "id", value: "endpoint-1" }],
+			where: [{ field: "id", value: created.id }],
 		});
-		// the token round-trips as a real column (sso model — stored in the row, read back)
+		// both credentials round-trip as real columns (sso model — stored in the row, read back)
 		expect(raw?.secret).toBe("bot-token-123");
+		expect(raw?.webhookSecret).toBe("inbound-456");
 		expect(raw?.mode).toBe("webhook");
+	});
+
+	it("derives the id from the natural key — upserts of the same key converge on one row", async () => {
+		const endpoints = store();
+		const first = await endpoints.upsert({
+			provider: "telegram",
+			tenantId: "tenant-1",
+			endpointKey: "bot-a",
+			mode: "poll",
+		});
+		const second = await endpoints.upsert({
+			provider: "telegram",
+			tenantId: "tenant-1",
+			endpointKey: "bot-a",
+			mode: "poll",
+			status: "validated",
+		});
+		// same natural key -> same primary key -> one row, updated in place
+		expect(second.id).toBe(first.id);
+		expect(await endpoints.list()).toHaveLength(1);
+
+		// a different key member -> a different id
+		const other = await endpoints.upsert({
+			provider: "telegram",
+			tenantId: "tenant-2",
+			endpointKey: "bot-a",
+			mode: "poll",
+		});
+		expect(other.id).not.toBe(first.id);
 	});
 
 	it("lists endpoints by filter — the poll cron's fan-out", async () => {

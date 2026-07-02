@@ -3,9 +3,21 @@
 // makes createClaw's RequireCronHandler demand one. A passing run means each @ts-expect-error errored.
 import { createClaw, type RuntimeConfig } from "euroclaw";
 import { describe, test } from "vitest";
-import { channels, telegram } from "../src/index";
+import { type Channel, channels, telegram } from "../src/index";
 
 declare const model: RuntimeConfig["model"];
+
+// A second provider for the mixed-registry case (channels() rejects duplicate providers at runtime).
+// Webhook-only with an explicit `$poll: false`, so it never contributes the cron requirement.
+const hooksOnly = {
+	provider: "hooks",
+	tenantId: "t",
+	supports: { webhook: true, poll: false },
+	codeEndpoints: [{ key: "default", mode: "webhook" }],
+	parseInbound: () => [],
+	send: async () => {},
+	$poll: false,
+} satisfies Channel & { readonly $poll: false };
 
 describe("channels cron-handler requirement", () => {
 	test("a webhook-only channel registry needs no cronHandler", () => {
@@ -35,11 +47,10 @@ describe("channels cron-handler requirement", () => {
 		createClaw({
 			model,
 			plugins: [
-				channels([
-					telegram({ tenantId: "a", mode: "webhook" }),
-					telegram({ tenantId: "b", mode: "poll" }),
-				]),
+				channels([hooksOnly, telegram({ tenantId: "b", mode: "poll" })]),
 			],
 		});
+		// and the webhook-only fixture alone does not
+		createClaw({ model, plugins: [channels([hooksOnly])] });
 	});
 });
