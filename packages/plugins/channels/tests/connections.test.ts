@@ -1,5 +1,4 @@
 import { memoryAdapter } from "@euroclaw/storage-core";
-import type { Claw } from "euroclaw";
 import { describe, expect, it } from "vitest";
 import {
 	channelConnections,
@@ -29,7 +28,7 @@ function fakeClaw(recorded: { binds: unknown[]; relayed: string[] }) {
 				};
 			},
 		},
-	} as unknown as Claw;
+	};
 }
 
 function fakeChannel(overrides: Partial<Channel> = {}): Channel {

@@ -3,11 +3,11 @@
 // channelConnections = user-registered bots) and every provider build on this module; nothing here
 // imports a plugin or a store.
 
-import type { JsonValue } from "@euroclaw/contracts";
 import type {
 	BindConversationClawInput,
 	BindConversationThreadInput,
-} from "euroclaw";
+	JsonValue,
+} from "@euroclaw/contracts";
 
 export const channelEndpointModeValues = ["webhook", "poll"] as const;
 export type ChannelEndpointMode = (typeof channelEndpointModeValues)[number];

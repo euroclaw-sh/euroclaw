@@ -21,6 +21,7 @@ export {
 	type ChannelEndpointStateStore,
 	createChannelEndpointStateStore,
 } from "./channels/store";
+export { type ClawLike, requireClaw } from "./core/claw";
 export type {
 	Channel,
 	ChannelEndpointMode,

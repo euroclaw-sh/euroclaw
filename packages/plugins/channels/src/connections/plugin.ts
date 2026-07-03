@@ -1,4 +1,8 @@
 import {
+	type BindConversationClawInput,
+	type BindConversationThreadInput,
+	bindConversationClawInput,
+	bindConversationThreadInput,
 	configurationError,
 	type EuroclawCronFlag,
 	type EuroclawPlugin,
@@ -8,16 +12,8 @@ import {
 } from "@euroclaw/contracts";
 import { validationError } from "@euroclaw/errors";
 import { type } from "arktype";
-import type {
-	BindConversationClawInput,
-	BindConversationThreadInput,
-	Claw,
-} from "euroclaw";
-import {
-	bindConversationClawInput,
-	bindConversationThreadInput,
-} from "euroclaw";
 import { assertUniqueChannels, contextAdapter } from "../channels/plugin";
+import { requireClaw } from "../core/claw";
 import type { Channel, EndpointContext } from "../core/contracts";
 import { dispatchWebhook, pollEndpoint } from "../core/dispatch";
 import { channelConnectionsModels } from "./schema";
@@ -228,7 +224,7 @@ function buildPlugin(
 			}
 			const rawBody = await request.text();
 			const result = await dispatchWebhook({
-				claw: claw as Claw,
+				claw: requireClaw(claw),
 				channel,
 				endpoint: contextFor(row),
 				request: { headers: request.headers, rawBody },
@@ -254,7 +250,7 @@ function buildPlugin(
 				const channel = byProvider.get(row.provider);
 				if (!channel) continue; // registered before its provider left the registry — skip
 				const result = await pollEndpoint({
-					claw: claw as Claw,
+					claw: requireClaw(claw),
 					channel,
 					endpoint: contextFor(row),
 					limit,

@@ -7,7 +7,7 @@ import {
 	type EuroclawRouteContext,
 } from "@euroclaw/contracts";
 import type { Adapter } from "@euroclaw/storage-core";
-import type { Claw } from "euroclaw";
+import { requireClaw } from "../core/claw";
 import type { Channel, EndpointContext } from "../core/contracts";
 import { dispatchWebhook, pollEndpoint } from "../core/dispatch";
 import { channelsModels } from "./schema";
@@ -186,7 +186,7 @@ function buildChannelsPlugin(
 			}
 			const endpoint = await contextFor(channel, code);
 			const result = await dispatchWebhook({
-				claw: claw as Claw,
+				claw: requireClaw(claw),
 				channel,
 				endpoint,
 				request: inbound,
@@ -211,7 +211,7 @@ function buildChannelsPlugin(
 			for (const target of pollTargets) {
 				const endpoint = await contextFor(target.channel, target.endpoint);
 				const result = await pollEndpoint({
-					claw: claw as Claw,
+					claw: requireClaw(claw),
 					channel: target.channel,
 					endpoint,
 					limit,

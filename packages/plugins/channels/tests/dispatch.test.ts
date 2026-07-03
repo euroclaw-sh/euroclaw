@@ -1,4 +1,3 @@
-import type { Claw } from "euroclaw";
 import { describe, expect, it } from "vitest";
 import {
 	type Channel,
@@ -30,7 +29,7 @@ function fakeClaw(recorded: { binds: unknown[]; relayed: string[] }) {
 				};
 			},
 		},
-	} as unknown as Claw;
+	};
 }
 
 function fakeChannel(overrides: Partial<Channel> = {}): Channel {

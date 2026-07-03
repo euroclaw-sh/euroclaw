@@ -4,7 +4,7 @@
 // verify → parse → bind → relay → reply round-trip and never touches storage.
 
 import { errorMessage } from "@euroclaw/errors";
-import type { Claw } from "euroclaw";
+import type { ClawLike } from "./claw";
 import type {
 	Channel,
 	EndpointContext,
@@ -25,7 +25,7 @@ export type ChannelDispatchResult = {
  * external conversation ids); whose data the conversation is rides the claw bind defaults.
  */
 export async function handleInbound(input: {
-	claw: Claw;
+	claw: ClawLike;
 	channel: Channel;
 	endpoint: EndpointContext;
 	message: InboundMessage;
@@ -64,7 +64,7 @@ export async function handleInbound(input: {
  * parse, relay each message, and report `received` to the persist sink.
  */
 export async function dispatchWebhook(input: {
-	claw: Claw;
+	claw: ClawLike;
 	channel: Channel;
 	endpoint: EndpointContext;
 	request: InboundRequest;
@@ -92,7 +92,7 @@ export async function dispatchWebhook(input: {
  * `poll-error` event and the error is rethrown so the cron surfaces it.
  */
 export async function pollEndpoint(input: {
-	claw: Claw;
+	claw: ClawLike;
 	channel: Channel;
 	endpoint: EndpointContext;
 	persist: PersistEndpointEvent;

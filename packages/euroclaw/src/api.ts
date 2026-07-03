@@ -2,12 +2,13 @@ import type {
 	AppendMessageInput,
 	ApprovalRecord,
 	ApprovalStatus,
+	BindConversationInput,
+	BindConversationResult,
 	CheckpointRecord,
 	ClawRecord,
 	ClawsStore,
 	ConversationBindingRecord,
 	CreateCheckpointInput,
-	CreateClawInput,
 	CreateThreadInput,
 	CreateToolCallInput,
 	CreateToolResultInput,
@@ -23,10 +24,10 @@ import type {
 import {
 	appendMessageInput,
 	approvalStatus,
+	bindConversationInput,
+	bindConversationResult,
 	clawEntity,
-	clawRecord,
 	configurationError,
-	conversationBindingRecord,
 	createCheckpointInput,
 	createClawInput,
 	createThreadInput,
@@ -35,8 +36,6 @@ import {
 	jsonObject,
 	RESERVED_CONTEXT_PREFIX,
 	stateError,
-	threadEntity,
-	threadRecord,
 	toolCallEntity,
 	validationError,
 } from "@euroclaw/contracts";
@@ -229,31 +228,23 @@ const engineRunMetadataOrUndefined = engineRunMetadataInput.or("undefined");
 // leaks into the tool-call patch).
 const updateClawPatchInput = clawEntity.updateSchema();
 const toolCallStatusPatchInput = toolCallEntity.updateSchema();
-// Claw bind defaults may carry tenantId: tenancy is optional claw-creation data, never part of the
-// binding's identity — bindings are keyed by the endpoint, and whose data a conversation is lives on
-// the claw it points at.
-export const bindConversationClawInput = clawEntity.schema({
-	omit: ["status", "createdAt", "updatedAt"],
-	optional: ["id", "context"],
-});
-export type BindConversationClawInput = CreateClawInput;
 
-export const bindConversationThreadInput = threadEntity.schema({
-	omit: [
-		"clawId",
-		"tenantId",
-		"status",
-		"currentMessageId",
-		"currentSequence",
-		"createdAt",
-		"updatedAt",
-	],
-	optional: ["id"],
-});
-export type BindConversationThreadInput = Omit<
-	CreateThreadInput,
-	"clawId" | "tenantId"
->;
+export type {
+	BindConversationClawInput,
+	BindConversationInput,
+	BindConversationResult,
+	BindConversationThreadInput,
+} from "@euroclaw/contracts";
+// The bindConversation protocol (schemas + types) lives in @euroclaw/contracts next to the entities
+// it derives from — channel plugins validate against it without depending on this assembly package.
+// Re-exported here because it is part of the product api surface.
+export {
+	bindConversationClawInput,
+	bindConversationInput,
+	bindConversationResult,
+	bindConversationThreadInput,
+} from "@euroclaw/contracts";
+
 const listMessagesInput = ark({
 	"afterSequence?": "number | undefined",
 	"limit?": "number | undefined",
@@ -296,44 +287,6 @@ const continueEngineRunInput = ark({
 	"ctx?": jsonObjectOrUndefined,
 	"run?": engineRunMetadataOrUndefined,
 });
-export const bindConversationInput = ark({
-	"claw?": bindConversationClawInput.or("undefined"),
-	"clawId?": "string | undefined",
-	// Which ingress the conversation arrived on — required and explicit: it is part of the binding's
-	// identity, and a silently defaulted key would invite cross-endpoint collisions.
-	endpointKey: "string",
-	"externalActorId?": "string | undefined",
-	externalConversationId: "string",
-	"metadata?": jsonObjectOrUndefined,
-	provider: "string",
-	"thread?": bindConversationThreadInput.or("undefined"),
-	"threadId?": "string | undefined",
-});
-type BindConversationInputFromSchema = typeof bindConversationInput.infer;
-export type BindConversationInput = Omit<
-	BindConversationInputFromSchema,
-	"claw" | "thread"
-> & {
-	claw?: BindConversationClawInput;
-	thread?: BindConversationThreadInput;
-};
-
-export const bindConversationResult = ark({
-	binding: conversationBindingRecord,
-	claw: clawRecord,
-	created: "boolean",
-	thread: threadRecord,
-});
-type BindConversationResultFromSchema = typeof bindConversationResult.infer;
-export type BindConversationResult = Omit<
-	BindConversationResultFromSchema,
-	"binding" | "claw" | "thread"
-> & {
-	binding: ConversationBindingRecord;
-	claw: ClawRecord;
-	thread: ThreadRecord;
-};
-
 export const clawApiInputSchemas = {
 	bindConversation: bindConversationInput,
 	appendMessage: appendMessageInput,

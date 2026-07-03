@@ -5,6 +5,9 @@ import type {
 } from "../entity";
 import type {
 	appendMessageInputOptions,
+	bindConversationInput,
+	bindConversationResult,
+	bindConversationThreadInputOptions,
 	checkpointFields,
 	checkpointKindValues,
 	clawFields,
@@ -136,6 +139,33 @@ export type ConversationBindingLookup = {
 	provider: string;
 	endpointKey: string;
 	externalConversationId: string;
+};
+
+// ── bindConversation protocol types ───────────────────────────────────────────────────────────────
+/** Claw bind defaults ARE claw-creation input — see bindConversationClawInput in schema. */
+export type BindConversationClawInput = CreateClawInput;
+export type BindConversationThreadInput = EntitySchemaInput<
+	typeof threadFields,
+	typeof bindConversationThreadInputOptions
+>;
+
+type BindConversationInputFromSchema = typeof bindConversationInput.infer;
+export type BindConversationInput = Omit<
+	BindConversationInputFromSchema,
+	"claw" | "thread"
+> & {
+	claw?: BindConversationClawInput;
+	thread?: BindConversationThreadInput;
+};
+
+type BindConversationResultFromSchema = typeof bindConversationResult.infer;
+export type BindConversationResult = Omit<
+	BindConversationResultFromSchema,
+	"binding" | "claw" | "thread"
+> & {
+	binding: ConversationBindingRecord;
+	claw: ClawRecord;
+	thread: ThreadRecord;
 };
 
 export type ConversationBindingStore = {

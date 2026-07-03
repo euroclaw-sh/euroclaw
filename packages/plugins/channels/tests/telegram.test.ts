@@ -1,4 +1,3 @@
-import type { Claw } from "euroclaw";
 import { describe, expect, it } from "vitest";
 import {
 	dispatchWebhook,
@@ -232,7 +231,7 @@ describe("telegram channel", () => {
 					userMessage: { id: "m" },
 				}),
 			},
-		} as unknown as Claw;
+		};
 
 		const result = await dispatchWebhook({
 			claw,

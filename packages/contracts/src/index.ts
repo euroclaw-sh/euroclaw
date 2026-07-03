@@ -16,6 +16,10 @@ export {
 // ── claws (conversational/agent-state domain) ────────────────────────────────
 export type {
 	AppendMessageInput,
+	BindConversationClawInput,
+	BindConversationInput,
+	BindConversationResult,
+	BindConversationThreadInput,
 	CheckpointKind,
 	CheckpointRecord,
 	CheckpointStore,
@@ -51,6 +55,10 @@ export type {
 } from "./claws/contracts";
 export {
 	appendMessageInput,
+	bindConversationClawInput,
+	bindConversationInput,
+	bindConversationResult,
+	bindConversationThreadInput,
 	checkpointEntity,
 	checkpointFields,
 	checkpointKind,
@@ -239,3 +247,17 @@ export {
 	redactionContextFrom,
 	rehydrationContext,
 } from "./governance/redact";
+export type {
+	NewRunCheckpoint,
+	RunCheckpointRecord,
+	RunCheckpointStatus,
+	RunCheckpointStore,
+} from "./run-checkpoint";
+export {
+	newRunCheckpoint,
+	runCheckpointEntity,
+	runCheckpointFields,
+	runCheckpointRecord,
+	runCheckpointSchema,
+	runCheckpointStatus,
+} from "./run-checkpoint";

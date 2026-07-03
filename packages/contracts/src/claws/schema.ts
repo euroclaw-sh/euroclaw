@@ -1,4 +1,5 @@
 import { type } from "arktype";
+import { jsonObject } from "../common";
 import { entity, field } from "../entity";
 
 export const clawStatusValues = ["active", "paused", "archived"] as const;
@@ -289,6 +290,52 @@ export const createConversationBindingInputOptions = {
 export const createConversationBindingInput = conversationBindingEntity.schema(
 	createConversationBindingInputOptions,
 );
+
+// ── the bindConversation protocol (the account-linking analog) ───────────────────────────────────
+// Protocol, not product: these derive purely from the entities above, so they live here — channel
+// plugins validate against them without depending on the euroclaw assembly.
+
+// Claw bind defaults ARE claw-creation input (bindConversation spreads them into claws.create); the
+// alias keeps the domain name without duplicating the schema. Tenancy is optional claw-creation
+// data, never part of the binding's identity.
+export const bindConversationClawInput = createClawInput;
+
+export const bindConversationThreadInputOptions = {
+	omit: [
+		"clawId",
+		"tenantId",
+		"status",
+		"currentMessageId",
+		"currentSequence",
+		"createdAt",
+		"updatedAt",
+	],
+	optional: ["id"],
+} as const;
+export const bindConversationThreadInput = threadEntity.schema(
+	bindConversationThreadInputOptions,
+);
+
+export const bindConversationInput = type({
+	"claw?": bindConversationClawInput.or("undefined"),
+	"clawId?": "string | undefined",
+	// Which ingress the conversation arrived on — required and explicit: it is part of the binding's
+	// identity, and a silently defaulted key would invite cross-endpoint collisions.
+	endpointKey: "string",
+	"externalActorId?": "string | undefined",
+	externalConversationId: "string",
+	"metadata?": jsonObject.or("undefined"),
+	provider: "string",
+	"thread?": bindConversationThreadInput.or("undefined"),
+	"threadId?": "string | undefined",
+});
+
+export const bindConversationResult = type({
+	binding: conversationBindingRecord,
+	claw: clawRecord,
+	created: "boolean",
+	thread: threadRecord,
+});
 
 export const clawsSchema = {
 	...clawEntity.storage,
