@@ -30,16 +30,20 @@ export type {
 	RuntimeEnvironment,
 	RuntimeModel,
 	RuntimeRunOptions,
+	RuntimeYieldMetadata,
 } from "./runtime";
 export {
 	createRuntime,
 	defaultRuntimeNewId,
 	parseRuntimeApprovalMetadata,
+	parseRuntimeYieldMetadata,
 	RuntimeCompletedResult,
 	RuntimeDeniedResult,
 	RuntimeResult,
 	RuntimeWaitingApprovalResult,
+	RuntimeYieldedResult,
 	recordingFromRuntimeApprovalMetadata,
 	runtimeApprovalMetadata,
 	runtimeRunOptionsWithRecording,
+	runtimeYieldMetadata,
 } from "./runtime";

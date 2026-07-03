@@ -175,6 +175,20 @@ export function createClawRuntimeEventSink(
 					state: { approvalIds: event.approvalIds ?? [] },
 					threadId: recording.threadId,
 				});
+				return;
+			}
+
+			if (event.type === "run.yielded") {
+				// Product-history record of the slice boundary; the operational resume state lives in
+				// the runtime's run_checkpoint store, not here.
+				await store.checkpoints.create({
+					clawId: recording.clawId,
+					kind: "step",
+					runId: event.runId ?? event.id,
+					state: { checkpointId: event.checkpointId },
+					step: event.steps,
+					threadId: recording.threadId,
+				});
 			}
 		},
 	};

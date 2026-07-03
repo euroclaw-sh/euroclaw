@@ -26,6 +26,7 @@ import {
 import {
 	createApprovalStore,
 	createEffectStore,
+	createRunCheckpointStore,
 } from "@euroclaw/storage-durable";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, randomBytes, utf8ToBytes } from "@noble/hashes/utils.js";
@@ -66,6 +67,14 @@ export type RuntimeModel = Parameters<typeof wrapLanguageModel>[0]["model"];
 export type RuntimeAbortSignal = { readonly aborted: boolean };
 export type RuntimeRunOptions = {
 	abortSignal?: RuntimeAbortSignal;
+	/** Durable run identity (engine run id) — scopes effect ids and events across attempts/slices. */
+	runId?: string;
+	/**
+	 * Invocation soft deadline (ISO timestamp). Past it, the loop parks a yield checkpoint at the
+	 * next end-of-tool-result and returns `yielded` instead of continuing. Requires a
+	 * database-backed run checkpoint store.
+	 */
+	deadlineAt?: string;
 	readonly [RUNTIME_RECORDING_OPTION]?: RuntimeRecordingContext;
 };
 
@@ -125,9 +134,19 @@ export const RuntimeDeniedResult = ark({
 });
 export type RuntimeDeniedResult = typeof RuntimeDeniedResult.infer;
 
+export const RuntimeYieldedResult = ark({
+	status: "'yielded'",
+	text: "string",
+	steps: "number",
+	checkpointId: "string",
+});
+export type RuntimeYieldedResult = typeof RuntimeYieldedResult.infer;
+
 export const RuntimeResult = RuntimeCompletedResult.or(
 	RuntimeWaitingApprovalResult,
-).or(RuntimeDeniedResult);
+)
+	.or(RuntimeDeniedResult)
+	.or(RuntimeYieldedResult);
 export type RuntimeResult = typeof RuntimeResult.infer;
 
 export type RunContext<Config extends RuntimeConfig> = InferContext<Config>;
@@ -140,6 +159,12 @@ export type Runtime<Config extends RuntimeConfig = RuntimeConfig> = {
 	) => Promise<RuntimeResult>;
 	continueRun: (
 		id: string,
+		ctx?: RunContext<Config>,
+		options?: RuntimeRunOptions,
+	) => Promise<RuntimeResult | null>;
+	/** Resume a yielded run from its checkpoint (consume-once). Null when absent/consumed. */
+	resumeRun: (
+		checkpointId: string,
 		ctx?: RunContext<Config>,
 		options?: RuntimeRunOptions,
 	) => Promise<RuntimeResult | null>;
@@ -296,6 +321,14 @@ const runtimeModelMessage = ark({ role: "string", content: "unknown" }).narrow(
 	(value): value is ModelMessage => value.role.length > 0,
 );
 
+// The shared resume state every wait kind persists: the REDACTED transcript view plus the
+// recording identity to restore. Approval metadata adds the parked tool call; yield metadata adds
+// the next step. See docs/plans/yield-continuation-plan.md (wait taxonomy).
+const runtimeResumeStateShape = {
+	messages: runtimeModelMessage.array(),
+	"recording?": runtimeRecordingContext.or("undefined"),
+} as const;
+
 export const runtimeApprovalMetadata = ark({
 	version: "'runtime.ai-sdk.v1'",
 	waitId: "string",
@@ -303,10 +336,29 @@ export const runtimeApprovalMetadata = ark({
 	toolCallId: "string",
 	toolName: "string",
 	toolInput: "unknown",
-	messages: runtimeModelMessage.array(),
-	"recording?": runtimeRecordingContext.or("undefined"),
+	...runtimeResumeStateShape,
 });
 export type RuntimeApprovalMetadata = typeof runtimeApprovalMetadata.infer;
+
+export const runtimeYieldMetadata = ark({
+	version: "'runtime.ai-sdk.yield.v1'",
+	nextStep: "number",
+	"runId?": "string | undefined",
+	...runtimeResumeStateShape,
+});
+export type RuntimeYieldMetadata = typeof runtimeYieldMetadata.infer;
+
+export function parseRuntimeYieldMetadata(
+	metadata: unknown,
+): RuntimeYieldMetadata {
+	const valid = runtimeYieldMetadata(metadata) as
+		| RuntimeYieldMetadata
+		| ark.errors;
+	if (valid instanceof ark.errors) {
+		throw validationError("runtime yield metadata invalid", valid.summary);
+	}
+	return valid;
+}
 
 export function parseRuntimeApprovalMetadata(
 	metadata: unknown,
@@ -346,6 +398,9 @@ export function createRuntime<const Config extends RuntimeConfig>(
 	const approvalStore = adapter ? createApprovalStore(adapter) : undefined;
 	const effectStore =
 		config.effectStore ?? (adapter ? createEffectStore(adapter) : undefined);
+	const runCheckpointStore = adapter
+		? createRunCheckpointStore(adapter, { now })
+		: undefined;
 	const resolveContext = composeContext({
 		identity: config.identity,
 		membership: config.membership,
@@ -354,7 +409,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 	const modelTools = modelFacingTools(tools);
 	const catalog = createToolCatalog(toolEntriesFromToolSet(tools));
 	const emitEvent = (
-		recording: RuntimeRecordingContext | undefined,
+		context: { recording?: RuntimeRecordingContext; runId?: string },
 		payload: RuntimeEventPayloadInput,
 	) =>
 		emitRuntimeEvent(
@@ -363,9 +418,66 @@ export function createRuntime<const Config extends RuntimeConfig>(
 				createdAt: now(),
 				id: newId("evt"),
 				payload,
-				recording,
+				recording: context.recording,
+				runId: context.runId,
 			}),
 		);
+
+	// One outcome-event emitter for every loop entry point (run, approval resume, checkpoint resume).
+	const emitRunOutcome = async (
+		context: { recording?: RuntimeRecordingContext; runId?: string },
+		result: RuntimeResult,
+	): Promise<void> => {
+		if (result.status === "completed") {
+			await emitEvent(context, {
+				steps: result.steps,
+				text: result.text,
+				type: "run.completed",
+			});
+		} else if (result.status === "waiting_approval") {
+			await emitEvent(context, {
+				approvalIds: result.approvalIds,
+				steps: result.steps,
+				text: result.text,
+				type: "run.waiting_approval",
+			});
+		} else if (result.status === "yielded") {
+			await emitEvent(context, {
+				checkpointId: result.checkpointId,
+				steps: result.steps,
+				type: "run.yielded",
+			});
+		}
+	};
+
+	// Binds the checkpoint store to a run's identity so the loop can park a yield without knowing
+	// where checkpoints live. Undefined when no database is configured — the loop then cannot yield.
+	const yieldCheckpointPersister = (state: RunState) =>
+		runCheckpointStore
+			? async (input: {
+					nextStep: number;
+					messages: ModelMessage[];
+				}): Promise<string> => {
+					const metadata: JsonObject = {
+						version: "runtime.ai-sdk.yield.v1",
+						nextStep: input.nextStep,
+						messages: toJsonValue(
+							input.messages,
+							"runtime yield messages invalid",
+						),
+						...(state.recording !== undefined
+							? { recording: state.recording }
+							: {}),
+						...(state.runId !== undefined ? { runId: state.runId } : {}),
+					};
+					const record = await runCheckpointStore.create({
+						createdAt: now(),
+						metadata,
+						...(state.runId !== undefined ? { runId: state.runId } : {}),
+					});
+					return record.id;
+				}
+			: undefined;
 
 	const redactEventValue = async <T>(
 		value: T,
@@ -450,7 +562,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 						{ toolName: call.name },
 					);
 				}
-				state.currentEffectId ??= `run:${state.recording?.runId ?? state.runInstanceId ?? newId("run")}:tool:${state.currentToolCallId || call.name}`;
+				state.currentEffectId ??= `run:${state.runId ?? state.recording?.runId ?? state.runInstanceId ?? newId("run")}:tool:${state.currentToolCallId || call.name}`;
 				const inputHash = hashEffectInput({
 					toolName: call.name,
 					args: call.args,
@@ -573,6 +685,14 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		return resolveContext ? await resolveContext(ctx) : ctx;
 	};
 
+	const assertYieldable = (options: RuntimeRunOptions | undefined): void => {
+		if (options?.deadlineAt !== undefined && !runCheckpointStore) {
+			throw configurationError(
+				"deadline yields require a database-backed run checkpoint store",
+			);
+		}
+	};
+
 	const run = async (
 		prompt: string,
 		ctx?: Record<string, unknown>,
@@ -582,11 +702,14 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		state.runInstanceId = newId("runstate");
 		state.abortSignal = options?.abortSignal;
 		abortIfNeeded(options?.abortSignal);
+		assertYieldable(options);
 		const recording = options?.[RUNTIME_RECORDING_OPTION];
 		state.recording = recording;
+		state.runId = options?.runId;
+		const emitCtx = { recording, runId: options?.runId };
 		const core = createRunCore(state);
 		const resolvedCtx = await resolveRunContext(ctx);
-		await emitEvent(recording, {
+		await emitEvent(emitCtx, {
 			prompt: String(await redactEventValue(prompt, resolvedCtx)),
 			type: "run.started",
 		});
@@ -602,27 +725,16 @@ export function createRuntime<const Config extends RuntimeConfig>(
 			maxSteps,
 			now,
 			abortSignal: options?.abortSignal,
-			emitEvent: (payload) => emitEvent(recording, payload),
+			deadlineAt: options?.deadlineAt,
+			persistYieldCheckpoint: yieldCheckpointPersister(state),
+			emitEvent: (payload) => emitEvent(emitCtx, payload),
 			redactEventValue: (value) => redactEventValue(value, resolvedCtx),
 		});
 		const valid = RuntimeResult(result);
 		if (valid instanceof ark.errors) {
 			throw validationError("runtime.run result invalid", valid.summary);
 		}
-		if (valid.status === "completed") {
-			await emitEvent(recording, {
-				steps: valid.steps,
-				text: valid.text,
-				type: "run.completed",
-			});
-		} else if (valid.status === "waiting_approval") {
-			await emitEvent(recording, {
-				approvalIds: valid.approvalIds,
-				steps: valid.steps,
-				text: valid.text,
-				type: "run.waiting_approval",
-			});
-		}
+		await emitRunOutcome(emitCtx, valid);
 		return valid;
 	};
 
@@ -632,6 +744,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		options?: RuntimeRunOptions,
 	): Promise<RuntimeResult | null> => {
 		abortIfNeeded(options?.abortSignal);
+		assertYieldable(options);
 		const recording = options?.[RUNTIME_RECORDING_OPTION];
 		if (!approvalStore) return null;
 		const record = await approvalStore.get(id);
@@ -639,9 +752,10 @@ export function createRuntime<const Config extends RuntimeConfig>(
 
 		const checkpoint = parseRuntimeApprovalMetadata(record.metadata);
 		const effectiveRecording = recording ?? checkpoint.recording;
+		const emitCtx = { recording: effectiveRecording, runId: options?.runId };
 		if (record.status === "denied") {
 			const text = record.reason ?? "approval denied";
-			await emitEvent(effectiveRecording, {
+			await emitEvent(emitCtx, {
 				decidedBy: record.decidedBy,
 				reason: text,
 				reasonCode: record.reasonCode,
@@ -666,7 +780,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 					valid.summary,
 				);
 			}
-			await emitEvent(effectiveRecording, {
+			await emitEvent(emitCtx, {
 				approvalId: valid.approvalId,
 				decidedBy: valid.decidedBy,
 				reasonCode: valid.reasonCode,
@@ -684,6 +798,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		state.runInstanceId = `approval:${id}`;
 		state.abortSignal = options?.abortSignal;
 		state.recording = effectiveRecording;
+		state.runId = options?.runId;
 		state.currentToolCallId = checkpoint.toolCallId;
 		state.currentToolName = checkpoint.toolName;
 		state.currentToolInput = checkpoint.toolInput;
@@ -726,7 +841,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 						redactionContextFrom(resolvedCtx),
 					)
 				: toolResult.output;
-			await emitEvent(effectiveRecording, {
+			await emitEvent(emitCtx, {
 				...(state.currentEffectId !== undefined
 					? { effectId: state.currentEffectId }
 					: {}),
@@ -737,7 +852,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 				type: "tool.completed",
 			});
 		} else {
-			await emitEvent(effectiveRecording, {
+			await emitEvent(emitCtx, {
 				reason: toolResult.reason,
 				reasonCode: toolResult.reasonCode,
 				step: checkpoint.step,
@@ -755,6 +870,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		resumeState.runInstanceId = `${state.runInstanceId}:resume`;
 		resumeState.abortSignal = options?.abortSignal;
 		resumeState.recording = effectiveRecording;
+		resumeState.runId = options?.runId;
 		const result = await runAiSdkLoop({
 			model: config.model,
 			tools: modelTools,
@@ -768,7 +884,9 @@ export function createRuntime<const Config extends RuntimeConfig>(
 			maxSteps,
 			now,
 			abortSignal: options?.abortSignal,
-			emitEvent: (payload) => emitEvent(effectiveRecording, payload),
+			deadlineAt: options?.deadlineAt,
+			persistYieldCheckpoint: yieldCheckpointPersister(resumeState),
+			emitEvent: (payload) => emitEvent(emitCtx, payload),
 			redactEventValue: async (value) =>
 				config.redactor
 					? config.redactor.redactValue(
@@ -784,20 +902,56 @@ export function createRuntime<const Config extends RuntimeConfig>(
 				valid.summary,
 			);
 		}
-		if (valid.status === "completed") {
-			await emitEvent(effectiveRecording, {
-				steps: valid.steps,
-				text: valid.text,
-				type: "run.completed",
-			});
-		} else if (valid.status === "waiting_approval") {
-			await emitEvent(effectiveRecording, {
-				approvalIds: valid.approvalIds,
-				steps: valid.steps,
-				text: valid.text,
-				type: "run.waiting_approval",
-			});
+		await emitRunOutcome(emitCtx, valid);
+		return valid;
+	};
+
+	const resumeRun = async (
+		checkpointId: string,
+		ctx?: Record<string, unknown>,
+		options?: RuntimeRunOptions,
+	): Promise<RuntimeResult | null> => {
+		abortIfNeeded(options?.abortSignal);
+		if (!runCheckpointStore) return null;
+		// consume-once: under concurrent continuations exactly one caller proceeds.
+		const record = await runCheckpointStore.consume(checkpointId);
+		if (!record) return null;
+		const checkpoint = parseRuntimeYieldMetadata(record.metadata);
+		const recording =
+			options?.[RUNTIME_RECORDING_OPTION] ?? checkpoint.recording;
+		const runId = options?.runId ?? checkpoint.runId;
+		const emitCtx = { recording, runId };
+		const resolvedCtx = await resolveRunContext(ctx);
+
+		const state = createRunState();
+		state.runInstanceId = `checkpoint:${checkpointId}`;
+		state.abortSignal = options?.abortSignal;
+		state.recording = recording;
+		state.runId = runId;
+
+		const result = await runAiSdkLoop({
+			model: config.model,
+			tools: modelTools,
+			system: config.system,
+			messages: checkpoint.messages,
+			startStep: checkpoint.nextStep,
+			ctx,
+			resolvedCtx,
+			core: createRunCore(state),
+			state,
+			maxSteps,
+			now,
+			abortSignal: options?.abortSignal,
+			deadlineAt: options?.deadlineAt,
+			persistYieldCheckpoint: yieldCheckpointPersister(state),
+			emitEvent: (payload) => emitEvent(emitCtx, payload),
+			redactEventValue: (value) => redactEventValue(value, resolvedCtx),
+		});
+		const valid = RuntimeResult(result);
+		if (valid instanceof ark.errors) {
+			throw validationError("runtime.resumeRun result invalid", valid.summary);
 		}
+		await emitRunOutcome(emitCtx, valid);
 		return valid;
 	};
 
@@ -807,6 +961,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		catalog,
 		continueRun,
 		effects: effectStore,
+		resumeRun,
 		run,
 	};
 }

@@ -27,6 +27,7 @@ import type { ClaimedTask, RuntimeTask, SqlEngineStore } from "./store";
 
 export const RUNTIME_RUN_TASK = "runtime.run";
 export const RUNTIME_CONTINUE_RUN_TASK = "runtime.continueRun";
+export const RUNTIME_RESUME_RUN_TASK = "runtime.resumeRun";
 
 export const RuntimeRunTaskPayload = type({
 	prompt: "string",
@@ -41,16 +42,30 @@ export const RuntimeContinueRunTaskPayload = type({
 export type RuntimeContinueRunTaskPayload =
 	typeof RuntimeContinueRunTaskPayload.infer;
 
+export const RuntimeResumeRunTaskPayload = type({
+	checkpointId: "string",
+	"ctx?": type.Record("string", "unknown"),
+});
+export type RuntimeResumeRunTaskPayload =
+	typeof RuntimeResumeRunTaskPayload.infer;
+
 export type SqlEngineWorkerConfig = {
 	store: SqlEngineStore;
 	runtime: Runtime;
 	workerId: string;
 	leaseTtlMs?: number;
+	now?: () => string;
+};
+
+export type WorkerTickOptions = {
+	/** Invocation soft deadline (ISO). Past it, tick claims nothing and reports idle. */
+	deadlineAt?: string;
 };
 
 export type WorkerTickResult =
-	| { status: "idle" }
+	| { status: "idle"; reason?: "deadline" }
 	| { status: "waiting_approval"; task: RuntimeTask; approvalIds: string[] }
+	| { status: "yielded"; task: RuntimeTask; checkpointId: string }
 	| { status: "completed"; task: RuntimeTask }
 	| { status: "failed"; task: RuntimeTask | null; reason: string };
 
@@ -80,6 +95,29 @@ function runtimeContinueRunPayload(
 	return valid;
 }
 
+function runtimeResumeRunPayload(
+	payload: Record<string, unknown>,
+): RuntimeResumeRunTaskPayload {
+	const valid = RuntimeResumeRunTaskPayload(payload);
+	if (valid instanceof type.errors) {
+		throw validationError(
+			"runtime.resumeRun task payload invalid",
+			valid.summary,
+		);
+	}
+	return valid;
+}
+
+/** The claimed task's ctx, carried forward onto the continuation it enqueues. */
+function taskPayloadCtx(
+	payload: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+	const ctx = payload.ctx;
+	return typeof ctx === "object" && ctx !== null && !Array.isArray(ctx)
+		? (ctx as Record<string, unknown>)
+		: undefined;
+}
+
 function runtimeResult(result: unknown, label: string): RuntimeResult {
 	const valid = RuntimeResultSchema(result);
 	if (valid instanceof type.errors) {
@@ -100,20 +138,39 @@ async function runTask(
 	runtime: Runtime,
 	claim: ClaimedTask,
 	abortSignal?: RuntimeAbortSignal,
+	deadlineAt?: string,
 ): Promise<WorkerRuntimeResult> {
+	// runId scopes effect ids and runtime events to the durable run, across attempts and slices;
+	// deadlineAt lets the runtime park a yield checkpoint before the invocation's budget runs out.
+	const options = {
+		abortSignal,
+		runId: claim.task.runId,
+		...(deadlineAt !== undefined ? { deadlineAt } : {}),
+	};
 	if (claim.task.kind === RUNTIME_RUN_TASK) {
 		const payload = runtimeRunPayload(claim.task.payload);
 		return runtimeResult(
-			await runtime.run(payload.prompt, payload.ctx, { abortSignal }),
+			await runtime.run(payload.prompt, payload.ctx, options),
 			"runtime.run result",
 		);
+	}
+
+	if (claim.task.kind === RUNTIME_RESUME_RUN_TASK) {
+		const payload = runtimeResumeRunPayload(claim.task.payload);
+		const rawResumeResult = await runtime.resumeRun(
+			payload.checkpointId,
+			payload.ctx,
+			options,
+		);
+		if (!rawResumeResult) throw stateError("run checkpoint is not consumable");
+		return workerRuntimeResult(rawResumeResult);
 	}
 
 	const payload = runtimeContinueRunPayload(claim.task.payload);
 	const rawApprovalResult = await runtime.continueRun(
 		payload.approvalId,
 		payload.ctx,
-		{ abortSignal },
+		options,
 	);
 	if (!rawApprovalResult) throw stateError("approval is not consumable");
 	return workerRuntimeResult(rawApprovalResult);
@@ -230,11 +287,18 @@ function startHeartbeat(
 }
 
 export function createSqlEngineWorker(config: SqlEngineWorkerConfig): {
-	tick: () => Promise<WorkerTickResult>;
+	tick: (options?: WorkerTickOptions) => Promise<WorkerTickResult>;
 } {
 	const { store, runtime, workerId, leaseTtlMs } = config;
+	const now = config.now ?? (() => new Date().toISOString());
 	return {
-		async tick() {
+		async tick(options?: WorkerTickOptions) {
+			const deadlineAt = options?.deadlineAt;
+			// Budget spent → claim nothing, end the drain cleanly. The pending task waits for the
+			// next invocation instead of being killed mid-run by the platform.
+			if (deadlineAt !== undefined && now() >= deadlineAt) {
+				return { status: "idle", reason: "deadline" };
+			}
 			const claim = await store.claimDueTask({ workerId, leaseTtlMs });
 			if (!claim) return { status: "idle" };
 			const heartbeat = startHeartbeat(store, claim, leaseTtlMs);
@@ -242,7 +306,8 @@ export function createSqlEngineWorker(config: SqlEngineWorkerConfig): {
 			try {
 				if (
 					claim.task.kind !== RUNTIME_RUN_TASK &&
-					claim.task.kind !== RUNTIME_CONTINUE_RUN_TASK
+					claim.task.kind !== RUNTIME_CONTINUE_RUN_TASK &&
+					claim.task.kind !== RUNTIME_RESUME_RUN_TASK
 				) {
 					heartbeat.stop();
 					return failClaim(
@@ -261,7 +326,12 @@ export function createSqlEngineWorker(config: SqlEngineWorkerConfig): {
 					payload: { taskId: claim.task.id, workerId },
 				});
 
-				const runtimeTask = runTask(runtime, claim, heartbeat.abortSignal);
+				const runtimeTask = runTask(
+					runtime,
+					claim,
+					heartbeat.abortSignal,
+					deadlineAt,
+				);
 				void runtimeTask.catch(() => undefined);
 				const result = await Promise.race([
 					runtimeTask,
@@ -281,6 +351,48 @@ export function createSqlEngineWorker(config: SqlEngineWorkerConfig): {
 							reason: heartbeat.lostReason(),
 						}).message,
 					};
+				}
+
+				if (result.status === "yielded") {
+					// Self-continuation: park is already durable (the runtime persisted the checkpoint);
+					// one transaction completes this slice and enqueues the next. The run returns to
+					// "queued" — honest: a due task exists. Original ctx rides along on the continuation.
+					const ctx = taskPayloadCtx(claim.task.payload);
+					const checkpointId = result.checkpointId;
+					return store.transaction(async (tx) => {
+						const task = await tx.completeTask({
+							taskId: claim.task.id,
+							leaseToken: claim.leaseToken,
+							output: { result },
+						});
+						if (!task)
+							return {
+								status: "failed",
+								task: null,
+								reason: stateError("lease lost before yield transition", {
+									taskId: claim.task.id,
+								}).message,
+							};
+						await tx.updateRun(task.runId, { status: "queued" });
+						await tx.appendEvent({
+							runId: task.runId,
+							type: "run.yielded",
+							payload: {
+								taskId: task.id,
+								checkpointId,
+								steps: result.steps,
+							},
+						});
+						await tx.enqueueTask({
+							kind: RUNTIME_RESUME_RUN_TASK,
+							runId: task.runId,
+							payload: {
+								checkpointId,
+								...(ctx !== undefined ? { ctx } : {}),
+							},
+						});
+						return { status: "yielded", task, checkpointId };
+					});
 				}
 
 				if (result.status === "waiting_approval") {

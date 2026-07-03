@@ -25,6 +25,13 @@ export type AiSdkLoopInput = {
 	maxSteps: number;
 	now: () => string;
 	abortSignal?: RuntimeAbortSignal;
+	/** Invocation soft deadline (ISO). Past it, the loop parks a yield checkpoint and stops. */
+	deadlineAt?: string;
+	/** Persists the redacted resume state at a yield point; returns the checkpoint id. */
+	persistYieldCheckpoint?: (input: {
+		nextStep: number;
+		messages: ModelMessage[];
+	}) => Promise<string>;
 	emitEvent?: (payload: RuntimeEventPayloadInput) => Promise<void>;
 	redactEventValue?: <T>(value: T) => Promise<T>;
 };
@@ -243,6 +250,32 @@ export async function runAiSdkLoop(
 			);
 		}
 		messages.push(...toolMessages);
+
+		// The resumable point: every tool result of this step is in the transcript, no call is
+		// pending. Past the soft deadline, park the redacted resume state and yield instead of
+		// paying the next model call. Skipped on the final step — the loop is about to exit anyway.
+		if (
+			input.deadlineAt !== undefined &&
+			step + 1 < input.maxSteps &&
+			input.now() >= input.deadlineAt
+		) {
+			if (!input.persistYieldCheckpoint) {
+				throw configurationError(
+					"deadline yields require a run checkpoint persister",
+				);
+			}
+			const redactedMessages = await redactForEvent(input, messages);
+			const checkpointId = await input.persistYieldCheckpoint({
+				nextStep: step + 1,
+				messages: redactedMessages,
+			});
+			return {
+				status: "yielded",
+				text: "",
+				steps: step + 1,
+				checkpointId,
+			};
+		}
 	}
 
 	throw stateError(

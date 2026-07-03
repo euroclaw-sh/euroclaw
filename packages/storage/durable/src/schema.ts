@@ -9,6 +9,7 @@ import {
 	entity,
 	field,
 	piiMappingSchema,
+	runCheckpointSchema,
 } from "@euroclaw/contracts";
 import type { SchemaDeclaration } from "@euroclaw/storage-core";
 
@@ -38,4 +39,4 @@ export const teamSchema = {
 	...teamInviteEntity.storage,
 } satisfies SchemaDeclaration;
 
-export { approvalSchema, effectSchema, piiMappingSchema };
+export { approvalSchema, effectSchema, piiMappingSchema, runCheckpointSchema };

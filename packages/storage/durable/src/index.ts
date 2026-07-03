@@ -5,10 +5,13 @@ export { createClawsStore } from "./claws";
 export { createEffectStore } from "./effect";
 export type { PiiMappingStoreOptions } from "./pii";
 export { createPiiMappingStore } from "./pii";
+export type { RunCheckpointStoreOptions } from "./run-checkpoint";
+export { createRunCheckpointStore } from "./run-checkpoint";
 export {
 	approvalSchema,
 	effectSchema,
 	piiMappingSchema,
+	runCheckpointSchema,
 	teamSchema,
 } from "./schema";
 export type {

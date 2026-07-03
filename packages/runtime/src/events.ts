@@ -48,6 +48,13 @@ export const runWaitingApprovalEvent = ark({
 	"approvalIds?": ark("string").array().or("undefined"),
 });
 
+export const runYieldedEvent = ark({
+	...runtimeEventBaseShape,
+	type: "'run.yielded'",
+	steps: "number",
+	checkpointId: "string",
+});
+
 export const runDeniedEvent = ark({
 	...runtimeEventBaseShape,
 	type: "'run.denied'",
@@ -109,6 +116,7 @@ export const toolFailedEvent = ark({
 export const runtimeEvent = runStartedEvent
 	.or(runCompletedEvent)
 	.or(runWaitingApprovalEvent)
+	.or(runYieldedEvent)
 	.or(runDeniedEvent)
 	.or(toolCalledEvent)
 	.or(toolCompletedEvent)
@@ -146,12 +154,13 @@ export function createRuntimeEvent(input: {
 	id: string;
 	payload: RuntimeEventPayloadInput;
 	recording?: RuntimeRecordingContext;
+	runId?: string;
 }): RuntimeEvent {
 	const candidate = {
 		createdAt: input.createdAt,
 		id: input.id,
 		recording: input.recording,
-		runId: input.recording?.runId,
+		runId: input.runId ?? input.recording?.runId,
 		...input.payload,
 	};
 	const valid = runtimeEvent(candidate) as RuntimeEvent | ark.errors;

@@ -21,12 +21,15 @@ export type {
 export { createSqlEngineStore } from "./store";
 export type {
 	RuntimeContinueRunTaskPayload,
+	RuntimeResumeRunTaskPayload,
 	RuntimeRunTaskPayload,
 	SqlEngineWorkerConfig,
+	WorkerTickOptions,
 	WorkerTickResult,
 } from "./worker";
 export {
 	createSqlEngineWorker,
 	RUNTIME_CONTINUE_RUN_TASK,
+	RUNTIME_RESUME_RUN_TASK,
 	RUNTIME_RUN_TASK,
 } from "./worker";

@@ -9,6 +9,7 @@ import {
 	createSqlEngineStore,
 	createSqlEngineWorker,
 	RUNTIME_CONTINUE_RUN_TASK,
+	RUNTIME_RESUME_RUN_TASK,
 	RUNTIME_RUN_TASK,
 	sqlEngine,
 	sqlEngineSchema,
@@ -616,5 +617,158 @@ describe("@euroclaw/engine-sql", () => {
 		const instance = sqlEngine({ cron: false, store }).create(runtime);
 
 		expect(instance.plugins?.[0]?.cron).toEqual([]);
+	});
+
+	it("tick claims nothing past the invocation deadline", async () => {
+		const store = createSqlEngineStore(memoryAdapter(), {
+			now: () => "2026-01-01T00:00:00.000Z",
+		});
+		const runtime: Runtime = {
+			run: async () => ({ status: "completed", text: "done", steps: 1 }),
+			continueRun: async () => null,
+			resumeRun: async () => null,
+		};
+		const worker = createSqlEngineWorker({
+			store,
+			runtime,
+			workerId: "worker-1",
+			now: () => "2026-01-01T00:05:00.000Z",
+		});
+		const run = await store.createRun({ input: { prompt: "hello" } });
+		const task = await store.enqueueTask({
+			runId: run.id,
+			kind: RUNTIME_RUN_TASK,
+			payload: { prompt: "hello" },
+		});
+
+		const result = await worker.tick({
+			deadlineAt: "2026-01-01T00:04:00.000Z",
+		});
+
+		expect(result).toEqual({ status: "idle", reason: "deadline" });
+		expect(await store.getTask(task.id)).toMatchObject({ status: "pending" });
+
+		// The same tick with budget left claims and completes as usual.
+		const second = await worker.tick({
+			deadlineAt: "2026-01-01T00:06:00.000Z",
+		});
+		expect(second.status).toBe("completed");
+	});
+
+	it("worker completes a yielded slice and enqueues its continuation", async () => {
+		const store = createSqlEngineStore(memoryAdapter(), {
+			now: () => "2026-01-01T00:00:00.000Z",
+		});
+		const runtime: Runtime = {
+			run: async () => ({
+				status: "yielded",
+				text: "",
+				steps: 1,
+				checkpointId: "cp-1",
+			}),
+			continueRun: async () => null,
+			resumeRun: async () => null,
+		};
+		const worker = createSqlEngineWorker({
+			store,
+			runtime,
+			workerId: "worker-1",
+		});
+		const run = await store.createRun({ input: { prompt: "hello" } });
+		const task = await store.enqueueTask({
+			runId: run.id,
+			kind: RUNTIME_RUN_TASK,
+			payload: { prompt: "hello", ctx: { team: "acme" } },
+		});
+
+		const result = await worker.tick();
+
+		expect(result).toMatchObject({ status: "yielded", checkpointId: "cp-1" });
+		expect(await store.getRun(run.id)).toMatchObject({ status: "queued" });
+		expect(await store.getTask(task.id)).toMatchObject({ status: "completed" });
+		const events = await store.events(run.id);
+		expect(events.map((event) => event.type)).toEqual([
+			"run.started",
+			"run.yielded",
+		]);
+		expect(events[1]?.payload).toMatchObject({
+			checkpointId: "cp-1",
+			steps: 1,
+		});
+
+		// The continuation: same run, resume kind, original ctx carried forward.
+		const claim = await store.claimDueTask({ workerId: "worker-2" });
+		expect(claim?.task).toMatchObject({
+			kind: RUNTIME_RESUME_RUN_TASK,
+			runId: run.id,
+			payload: { checkpointId: "cp-1", ctx: { team: "acme" } },
+		});
+	});
+
+	it("worker executes a continuation task via runtime.resumeRun", async () => {
+		const store = createSqlEngineStore(memoryAdapter(), {
+			now: () => "2026-01-01T00:00:00.000Z",
+		});
+		let resumedFrom = "";
+		const runtime: Runtime = {
+			run: async () => ({ status: "completed", text: "", steps: 1 }),
+			continueRun: async () => null,
+			resumeRun: async (checkpointId) => {
+				resumedFrom = checkpointId;
+				return { status: "completed", text: "done", steps: 3 };
+			},
+		};
+		const worker = createSqlEngineWorker({
+			store,
+			runtime,
+			workerId: "worker-1",
+		});
+		const run = await store.createRun({ input: { prompt: "hello" } });
+		const task = await store.enqueueTask({
+			runId: run.id,
+			kind: RUNTIME_RESUME_RUN_TASK,
+			payload: { checkpointId: "cp-9" },
+		});
+
+		const result = await worker.tick();
+
+		expect(result.status).toBe("completed");
+		expect(resumedFrom).toBe("cp-9");
+		expect(await store.getRun(run.id)).toMatchObject({ status: "completed" });
+		expect(await store.getTask(task.id)).toMatchObject({
+			status: "completed",
+			output: { result: { status: "completed", text: "done", steps: 3 } },
+		});
+	});
+
+	it("worker fails a continuation whose checkpoint is not consumable", async () => {
+		const store = createSqlEngineStore(memoryAdapter(), {
+			now: () => "2026-01-01T00:00:00.000Z",
+		});
+		const runtime: Runtime = {
+			run: async () => ({ status: "completed", text: "", steps: 1 }),
+			continueRun: async () => null,
+			resumeRun: async () => null,
+		};
+		const worker = createSqlEngineWorker({
+			store,
+			runtime,
+			workerId: "worker-1",
+		});
+		const run = await store.createRun({ input: { prompt: "hello" } });
+		const task = await store.enqueueTask({
+			runId: run.id,
+			kind: RUNTIME_RESUME_RUN_TASK,
+			payload: { checkpointId: "cp-gone" },
+			maxAttempts: 1,
+		});
+
+		const result = await worker.tick();
+
+		expect(result.status).toBe("failed");
+		expect(await store.getRun(run.id)).toMatchObject({ status: "failed" });
+		expect((await store.getTask(task.id))?.lastError).toContain(
+			"run checkpoint is not consumable",
+		);
 	});
 });

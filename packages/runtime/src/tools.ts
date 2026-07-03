@@ -13,6 +13,8 @@ export type RunState = {
 	currentApprovalWaitId?: string;
 	currentEffectId?: string;
 	runInstanceId?: string;
+	/** Durable run identity (engine run id) — stable across attempts and yield slices. */
+	runId?: string;
 	currentModelRunner?: () => unknown | Promise<unknown>;
 	recording?: RuntimeRecordingContext;
 	abortSignal?: RuntimeAbortSignal;

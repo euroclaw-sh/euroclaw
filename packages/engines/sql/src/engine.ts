@@ -10,7 +10,11 @@ import type {
 import { drainWork as drainEngineWork } from "@euroclaw/engine-core";
 import type { Runtime } from "@euroclaw/runtime";
 import type { SqlEngineStore } from "./store";
-import type { SqlEngineWorkerConfig, WorkerTickResult } from "./worker";
+import type {
+	SqlEngineWorkerConfig,
+	WorkerTickOptions,
+	WorkerTickResult,
+} from "./worker";
 import {
 	createSqlEngineWorker,
 	RUNTIME_CONTINUE_RUN_TASK,
@@ -21,6 +25,15 @@ export type SqlEngineConfig = {
 	store: SqlEngineStore;
 	workerId?: string;
 	leaseTtlMs?: number;
+	/**
+	 * Invocation soft deadline for cron-driven work, in ms (e.g. 240_000 of Vercel's 300s budget).
+	 * Computed ONCE per cron invocation: the drain stops claiming past it, and an in-flight run
+	 * parks a yield checkpoint + continuation task instead of being killed by the platform.
+	 * Unset = never yield (daemon/no-timeout hosts).
+	 */
+	softDeadlineMs?: number;
+	/** Time source — for deterministic deadlines in tests. */
+	now?: () => string;
 	cron?: false | { limit?: number };
 };
 
@@ -32,7 +45,7 @@ type SqlEngineCronFlag<Config extends SqlEngineConfig> = Config extends {
 
 export type SqlEngineHandle = ClawEngineHandle<WorkerTickResult> & {
 	kind: "sql";
-	work: () => Promise<WorkerTickResult>;
+	work: (options?: WorkerTickOptions) => Promise<WorkerTickResult>;
 };
 
 function createSqlEngineHandle(input: {
@@ -41,6 +54,7 @@ function createSqlEngineHandle(input: {
 }): SqlEngineHandle {
 	const worker = createSqlEngineWorker({
 		leaseTtlMs: input.config.leaseTtlMs,
+		...(input.config.now !== undefined ? { now: input.config.now } : {}),
 		runtime: input.runtime,
 		store: input.config.store,
 		workerId: input.config.workerId ?? "euroclaw-worker",
@@ -88,14 +102,19 @@ function createSqlEngineHandle(input: {
 			});
 			return { id: run.id };
 		},
-		work: () => worker.tick(),
+		work: (options?: WorkerTickOptions) => worker.tick(options),
 	};
+}
+
+function addMs(iso: string, ms: number): string {
+	return new Date(Date.parse(iso) + ms).toISOString();
 }
 
 function sqlCronPlugin<const Config extends SqlEngineConfig>(
 	config: Config,
 	engine: SqlEngineHandle,
 ): EuroclawPlugin<SqlEngineCronFlag<Config>> {
+	const now = config.now ?? (() => new Date().toISOString());
 	return {
 		id: "engine-sql",
 		cron:
@@ -104,13 +123,23 @@ function sqlCronPlugin<const Config extends SqlEngineConfig>(
 				: [
 						{
 							id: "engine-sql:work",
-							handler: ({ limit }) =>
-								drainEngineWork({
+							handler: ({ limit }) => {
+								// Invocation-scoped, computed ONCE per cron firing: a warm drain that keeps
+								// claiming must not grant each task a fresh budget past the platform's wall.
+								const deadlineAt =
+									config.softDeadlineMs !== undefined
+										? addMs(now(), config.softDeadlineMs)
+										: undefined;
+								return drainEngineWork({
 									limit:
 										limit ??
 										(config.cron === false ? undefined : config.cron?.limit),
-									work: engine.work,
-								}),
+									work: () =>
+										engine.work(
+											deadlineAt !== undefined ? { deadlineAt } : undefined,
+										),
+								});
+							},
 						},
 					],
 	};

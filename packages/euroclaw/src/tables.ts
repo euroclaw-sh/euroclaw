@@ -14,6 +14,7 @@ import {
 	effectSchema,
 	entity,
 	piiMappingSchema,
+	runCheckpointSchema,
 } from "@euroclaw/contracts";
 import type { SchemaDeclaration } from "@euroclaw/storage-core";
 import { teamSchema } from "@euroclaw/storage-durable";
@@ -25,6 +26,7 @@ const CORE_TABLES: SchemaDeclaration = {
 	...approvalSchema,
 	...effectSchema,
 	...piiMappingSchema,
+	...runCheckpointSchema,
 	...teamSchema,
 };
 
