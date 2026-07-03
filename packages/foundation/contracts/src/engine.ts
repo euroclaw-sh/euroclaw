@@ -123,9 +123,12 @@ export async function drainWork<WorkResult = EngineWorkResult>(
 	const results: WorkResult[] = [];
 	for (let i = 0; i < limit; i++) {
 		const result = await input.work();
-		if (isIdle(result))
+		// null/undefined can never be a WorkResult — idle by definition. Checking it explicitly (not
+		// just via isIdle, which returns boolean, not a guard) is what lets the push stay cast-free:
+		// the old `as WorkResult` would have smuggled null into the results under a custom isIdle.
+		if (result == null || isIdle(result))
 			return { processed: results.length, results, status: "idle" };
-		results.push(result as WorkResult);
+		results.push(result);
 	}
 	return { processed: results.length, results, status: "limit" };
 }
