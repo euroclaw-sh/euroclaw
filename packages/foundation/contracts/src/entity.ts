@@ -4,26 +4,15 @@ import {
 	jsonObject as jsonObjectSchema,
 	jsonValue as jsonValueSchema,
 } from "./common";
+import type { FieldAttribute, FieldType } from "./storage";
 
-export type EntityFieldType = "string" | "number" | "boolean" | "date" | "json";
-
-export type EntityFieldMeta = {
-	type: EntityFieldType;
-	required?: boolean;
-	unique?: boolean;
-	index?: boolean;
-	references?: { model: string; field: string };
-	fieldName?: string;
-	input?: boolean;
-	returned?: boolean;
-	/** Set once at create, never changed by an update — enforced at the storage layer, and dropped from
-	 * the derived update input. (Distinct from `input: false`, which is set by the store, not the caller.) */
-	immutable?: boolean;
-	pii?: "none" | "possible" | "contains" | "redacted";
-	retention?: "default" | "ephemeral" | "audit" | "until-erasure";
-	defaultValue?: unknown | (() => unknown);
-	onUpdate?: () => unknown;
-};
+// A field's persisted meta IS the storage protocol's FieldAttribute — one definition, aliased here
+// so the DSL and the schema format can never drift. (`immutable`: set once at create, never changed
+// by an update — enforced at the storage layer and dropped from the derived update input; distinct
+// from `input: false`, which is set by the store, not the caller.) EntityField below layers the
+// compile-time extras on top: the kind/value generics and the ark validators.
+export type EntityFieldType = FieldType;
+export type EntityFieldMeta = FieldAttribute;
 
 type FieldKind =
 	| "string"
@@ -343,6 +332,8 @@ export function entity<const Fields extends Record<string, EntityField>>(
 	// caller gets a precise `EntityRecord<Fields> | ArkErrors` from `record(x)` — no cast at the parse
 	// site. This single assertion is the one place that bridge lives.
 	const record = ark(shapeFor(fields)) as unknown as Type<EntityRecord<Fields>>;
+	// Project each DSL field onto the storage FieldAttribute — same type, but the projection strips
+	// the compile-time extras (kind/values/ark validators) so schema declarations stay serializable.
 	const storage = {
 		[name]: {
 			fields: Object.fromEntries(
