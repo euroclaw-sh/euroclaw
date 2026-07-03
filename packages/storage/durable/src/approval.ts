@@ -40,7 +40,7 @@ function validateRecord(record: unknown): ApprovalRecord {
 }
 
 function validateNewApproval(input: unknown): NewApproval {
-	const valid = newApprovalSchema(input) as NewApproval | type.errors;
+	const valid = newApprovalSchema(input);
 	if (valid instanceof type.errors) {
 		throw validationError("new approval invalid", valid.summary);
 	}

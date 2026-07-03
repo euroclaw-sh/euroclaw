@@ -39,7 +39,7 @@ function validateRecord(record: unknown): RunCheckpointRecord {
 }
 
 function validateNewCheckpoint(input: unknown): NewRunCheckpoint {
-	const valid = newRunCheckpointSchema(input) as NewRunCheckpoint | type.errors;
+	const valid = newRunCheckpointSchema(input);
 	if (valid instanceof type.errors) {
 		throw validationError("new run checkpoint invalid", valid.summary);
 	}

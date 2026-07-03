@@ -163,7 +163,7 @@ export function createRuntimeEvent(input: {
 		runId: input.runId ?? input.recording?.runId,
 		...input.payload,
 	};
-	const valid = runtimeEvent(candidate) as RuntimeEvent | ark.errors;
+	const valid = runtimeEvent(candidate);
 	if (valid instanceof ark.errors) {
 		throw validationError("runtime event invalid", valid.summary);
 	}
@@ -182,9 +182,7 @@ export function runtimeRecordingContextFrom(
 ): RuntimeRecordingContext | undefined {
 	const value = ctx?.[RUNTIME_RECORDING_CONTEXT_KEY];
 	if (value === undefined) return undefined;
-	const valid = runtimeRecordingContext(value) as
-		| RuntimeRecordingContext
-		| ark.errors;
+	const valid = runtimeRecordingContext(value);
 	if (valid instanceof ark.errors) {
 		throw validationError("runtime recording context invalid", valid.summary);
 	}
@@ -211,7 +209,7 @@ export async function emitRuntimeEvent(
 	sinks: readonly RuntimeEventSink[],
 	event: RuntimeEvent,
 ): Promise<void> {
-	const valid = runtimeEvent(event) as RuntimeEvent | ark.errors;
+	const valid = runtimeEvent(event);
 	if (valid instanceof ark.errors) {
 		throw validationError("runtime event invalid", valid.summary);
 	}

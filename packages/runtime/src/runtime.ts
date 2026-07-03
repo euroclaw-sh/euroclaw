@@ -351,9 +351,7 @@ export type RuntimeYieldMetadata = typeof runtimeYieldMetadata.infer;
 export function parseRuntimeYieldMetadata(
 	metadata: unknown,
 ): RuntimeYieldMetadata {
-	const valid = runtimeYieldMetadata(metadata) as
-		| RuntimeYieldMetadata
-		| ark.errors;
+	const valid = runtimeYieldMetadata(metadata);
 	if (valid instanceof ark.errors) {
 		throw validationError("runtime yield metadata invalid", valid.summary);
 	}
@@ -363,9 +361,7 @@ export function parseRuntimeYieldMetadata(
 export function parseRuntimeApprovalMetadata(
 	metadata: unknown,
 ): RuntimeApprovalMetadata {
-	const valid = runtimeApprovalMetadata(metadata) as
-		| RuntimeApprovalMetadata
-		| ark.errors;
+	const valid = runtimeApprovalMetadata(metadata);
 	if (valid instanceof ark.errors) {
 		throw validationError("runtime approval metadata invalid", valid.summary);
 	}
@@ -465,11 +461,14 @@ export function createRuntime<const Config extends RuntimeConfig>(
 							input.messages,
 							"runtime yield messages invalid",
 						),
-						...(state.recording !== undefined
-							? { recording: state.recording }
-							: {}),
 						...(state.runId !== undefined ? { runId: state.runId } : {}),
 					};
+					if (state.recording !== undefined) {
+						metadata.recording = toJsonValue(
+							state.recording,
+							"runtime yield recording invalid",
+						);
+					}
 					// Validate at the write boundary — a malformed envelope must not become a poison
 					// checkpoint that fails only when the continuation task tries to load it.
 					parseRuntimeYieldMetadata(metadata);
@@ -512,7 +511,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 			audit: config.audit,
 			approvalStore: approvalStoreOverride,
 			approvalMetadata: () => {
-				const metadata: Record<string, unknown> = {
+				const metadata: JsonObject = {
 					version: "runtime.ai-sdk.v1",
 					waitId: state.currentApprovalWaitId ?? "",
 					step: state.currentStep,
@@ -527,11 +526,16 @@ export function createRuntime<const Config extends RuntimeConfig>(
 						"runtime approval messages invalid",
 					),
 				};
-				if (state.recording !== undefined) metadata.recording = state.recording;
+				if (state.recording !== undefined) {
+					metadata.recording = toJsonValue(
+						state.recording,
+						"runtime approval recording invalid",
+					);
+				}
 				// Validate at the write boundary — a malformed checkpoint must not park an
 				// unresumable approval and surface only when a human grants it.
 				parseRuntimeApprovalMetadata(metadata);
-				return metadata as JsonObject;
+				return metadata;
 			},
 			resolveContext: resolveGovernanceContext,
 			plugins: config.plugins,
