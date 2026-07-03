@@ -25,10 +25,10 @@ importers:
     dependencies:
       '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../contracts
+        version: link:../../foundation/contracts
       '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../../errors
+        version: link:../../foundation/errors
       arktype:
         specifier: 2.2.0
         version: 2.2.0
@@ -45,50 +45,26 @@ importers:
         specifier: workspace:*
         version: link:../../euroclaw
 
-  packages/contracts:
-    dependencies:
-      '@euroclaw/errors':
-        specifier: workspace:*
-        version: link:../errors
-      arktype:
-        specifier: 2.2.0
-        version: 2.2.0
-
-  packages/core:
-    dependencies:
-      '@euroclaw/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@euroclaw/errors':
-        specifier: workspace:*
-        version: link:../errors
-      '@noble/hashes':
-        specifier: 2.2.0
-        version: 2.2.0
-      arktype:
-        specifier: 2.2.0
-        version: 2.2.0
-
   packages/engines/core:
     dependencies:
       '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../contracts
+        version: link:../../foundation/contracts
       '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../../errors
+        version: link:../../foundation/errors
 
   packages/engines/sql:
     dependencies:
       '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../contracts
+        version: link:../../foundation/contracts
       '@euroclaw/engine-core':
         specifier: workspace:*
         version: link:../core
       '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../../errors
+        version: link:../../foundation/errors
       '@euroclaw/runtime':
         specifier: workspace:*
         version: link:../../runtime
@@ -102,13 +78,11 @@ importers:
         specifier: 2.2.0
         version: 2.2.0
 
-  packages/errors: {}
-
   packages/euroclaw:
     dependencies:
       '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../contracts
+        version: link:../foundation/contracts
       '@euroclaw/engine-core':
         specifier: workspace:*
         version: link:../engines/core
@@ -127,7 +101,7 @@ importers:
     devDependencies:
       '@euroclaw/core':
         specifier: workspace:*
-        version: link:../core
+        version: link:../foundation/core
       '@euroclaw/skills':
         specifier: workspace:*
         version: link:../plugins/skills
@@ -137,6 +111,32 @@ importers:
       ai:
         specifier: 5.0.203
         version: 5.0.203(zod@4.4.3)
+
+  packages/foundation/contracts:
+    dependencies:
+      '@euroclaw/errors':
+        specifier: workspace:*
+        version: link:../errors
+      arktype:
+        specifier: 2.2.0
+        version: 2.2.0
+
+  packages/foundation/core:
+    dependencies:
+      '@euroclaw/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+      '@euroclaw/errors':
+        specifier: workspace:*
+        version: link:../errors
+      '@noble/hashes':
+        specifier: 2.2.0
+        version: 2.2.0
+      arktype:
+        specifier: 2.2.0
+        version: 2.2.0
+
+  packages/foundation/errors: {}
 
   packages/plugins/better-auth:
     dependencies:
@@ -151,7 +151,7 @@ importers:
     dependencies:
       '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../contracts
+        version: link:../../foundation/contracts
       '@euroclaw/storage-core':
         specifier: workspace:*
         version: link:../../storage/core
@@ -164,7 +164,7 @@ importers:
     devDependencies:
       '@euroclaw/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../foundation/core
       '@euroclaw/storage-durable':
         specifier: workspace:*
         version: link:../../storage/durable
@@ -179,10 +179,10 @@ importers:
     dependencies:
       '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../contracts
+        version: link:../../foundation/contracts
       '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../../errors
+        version: link:../../foundation/errors
       '@euroclaw/storage-core':
         specifier: workspace:*
         version: link:../../storage/core
@@ -195,13 +195,13 @@ importers:
     devDependencies:
       '@euroclaw/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../foundation/core
 
   packages/policy/better-auth:
     dependencies:
       '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../contracts
+        version: link:../../foundation/contracts
       '@euroclaw/policy-core':
         specifier: workspace:*
         version: link:../core
@@ -211,7 +211,7 @@ importers:
     devDependencies:
       '@euroclaw/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../foundation/core
 
   packages/policy/cedar:
     dependencies:
@@ -220,45 +220,45 @@ importers:
         version: 4.11.1
       '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../contracts
+        version: link:../../foundation/contracts
       '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../../errors
+        version: link:../../foundation/errors
       '@euroclaw/policy-core':
         specifier: workspace:*
         version: link:../core
     devDependencies:
       '@euroclaw/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../foundation/core
 
   packages/policy/core:
     dependencies:
       '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../contracts
+        version: link:../../foundation/contracts
       '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../../errors
+        version: link:../../foundation/errors
       arktype:
         specifier: 2.2.0
         version: 2.2.0
     devDependencies:
       '@euroclaw/core':
         specifier: workspace:*
-        version: link:../../core
+        version: link:../../foundation/core
 
   packages/runtime:
     dependencies:
       '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../contracts
+        version: link:../foundation/contracts
       '@euroclaw/core':
         specifier: workspace:*
-        version: link:../core
+        version: link:../foundation/core
       '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../errors
+        version: link:../foundation/errors
       '@euroclaw/storage-core':
         specifier: workspace:*
         version: link:../storage/core
@@ -285,13 +285,13 @@ importers:
     dependencies:
       '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../../errors
+        version: link:../../foundation/errors
 
   packages/storage/drizzle:
     dependencies:
       '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../../errors
+        version: link:../../foundation/errors
       '@euroclaw/storage-core':
         specifier: workspace:*
         version: link:../core
@@ -310,10 +310,10 @@ importers:
     dependencies:
       '@euroclaw/contracts':
         specifier: workspace:*
-        version: link:../../contracts
+        version: link:../../foundation/contracts
       '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../../errors
+        version: link:../../foundation/errors
       '@euroclaw/storage-core':
         specifier: workspace:*
         version: link:../core
@@ -341,7 +341,7 @@ importers:
     dependencies:
       '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../../errors
+        version: link:../../foundation/errors
       '@euroclaw/storage-core':
         specifier: workspace:*
         version: link:../core
@@ -373,7 +373,7 @@ importers:
     dependencies:
       '@euroclaw/errors':
         specifier: workspace:*
-        version: link:../../errors
+        version: link:../../foundation/errors
       '@euroclaw/storage-core':
         specifier: workspace:*
         version: link:../core

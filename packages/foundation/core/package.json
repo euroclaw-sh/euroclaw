@@ -1,15 +1,15 @@
 {
-	"name": "@euroclaw/contracts",
+	"name": "@euroclaw/core",
 	"version": "0.0.0",
 	"type": "module",
-	"description": "The euroclaw protocol: governance boundary + plugin contracts, the entity schema DSL, and the port/schema definitions every euroclaw package speaks. Near-zero deps.",
+	"description": "The euroclaw governance & privacy kernel: the redactor, hash-chained audit, approval gate, and createGovernance — the non-bypassable pipeline. Re-exports @euroclaw/contracts.",
 	"license": "MIT",
 	"author": "Konstantin Ponomarev",
 	"homepage": "https://github.com/euroclaw-sh/euroclaw#readme",
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/euroclaw-sh/euroclaw.git",
-		"directory": "packages/contracts"
+		"directory": "packages/foundation/core"
 	},
 	"bugs": {
 		"url": "https://github.com/euroclaw-sh/euroclaw/issues"
@@ -35,7 +35,9 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@euroclaw/contracts": "workspace:*",
 		"@euroclaw/errors": "workspace:*",
+		"@noble/hashes": "2.2.0",
 		"arktype": "2.2.0"
 	}
 }
