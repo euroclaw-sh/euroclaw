@@ -1,5 +1,7 @@
-import type { BindConversationInput } from "@euroclaw/contracts";
-import { configurationError } from "@euroclaw/errors";
+import {
+	type BindConversationInput,
+	configurationError,
+} from "@euroclaw/contracts";
 
 /**
  * The minimal claw surface the dispatch engine consumes — two api methods, nothing more. The route

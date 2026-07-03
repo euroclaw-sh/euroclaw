@@ -152,9 +152,6 @@ importers:
       '@euroclaw/contracts':
         specifier: workspace:*
         version: link:../../contracts
-      '@euroclaw/errors':
-        specifier: workspace:*
-        version: link:../../errors
       '@euroclaw/storage-core':
         specifier: workspace:*
         version: link:../../storage/core

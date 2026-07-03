@@ -9,8 +9,8 @@ import {
 	type EuroclawPluginConfigureContext,
 	type EuroclawRoute,
 	type EuroclawRouteContext,
+	validationError,
 } from "@euroclaw/contracts";
-import { validationError } from "@euroclaw/errors";
 import { type } from "arktype";
 import { assertUniqueChannels, contextAdapter } from "../channels/plugin";
 import { requireClaw } from "../core/claw";

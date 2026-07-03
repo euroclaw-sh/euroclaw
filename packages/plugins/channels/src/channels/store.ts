@@ -1,5 +1,8 @@
-import type { EntityRecord, EntityUpdateInput } from "@euroclaw/contracts";
-import { validationError } from "@euroclaw/errors";
+import {
+	type EntityRecord,
+	type EntityUpdateInput,
+	validationError,
+} from "@euroclaw/contracts";
 import { type Adapter, schemaAdapter } from "@euroclaw/storage-core";
 import { type } from "arktype";
 import type { ChannelEndpointMode, EndpointEvent } from "../core/contracts";

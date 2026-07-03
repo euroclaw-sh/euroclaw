@@ -45,7 +45,6 @@
 	},
 	"dependencies": {
 		"@euroclaw/contracts": "workspace:*",
-		"@euroclaw/errors": "workspace:*",
 		"@euroclaw/storage-core": "workspace:*",
 		"@noble/hashes": "2.2.0",
 		"arktype": "2.2.0"

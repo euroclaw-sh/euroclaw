@@ -1,5 +1,8 @@
-import type { EntityRecord, EntitySchemaInput } from "@euroclaw/contracts";
-import { validationError } from "@euroclaw/errors";
+import {
+	type EntityRecord,
+	type EntitySchemaInput,
+	validationError,
+} from "@euroclaw/contracts";
 import {
 	type Adapter,
 	schemaAdapter,
