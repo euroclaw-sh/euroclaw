@@ -143,8 +143,9 @@ function buildChannelsPlugin(
 		);
 	};
 
-	// A code endpoint's normalized view: no secrets (the client lives on the channel), bind defaults
-	// straight from code config, cursor from the persisted state row.
+	// A code endpoint's normalized view: no secrets (the client lives on the channel), no bind
+	// defaults (conversations create bare personal claws — placement is the host's logic through the
+	// public bindConversation api), cursor from the persisted state row.
 	const contextFor = async (
 		channel: Channel,
 		endpoint: { key: string; mode: "webhook" | "poll" },
@@ -158,8 +159,6 @@ function buildChannelsPlugin(
 			endpointKey: endpoint.key,
 			mode: endpoint.mode,
 			cursor: state?.cursor,
-			claw: channel.bind?.claw,
-			thread: channel.bind?.thread,
 		};
 	};
 

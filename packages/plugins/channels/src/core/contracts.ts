@@ -56,7 +56,11 @@ export type EndpointContext = {
 	webhookSecret?: string;
 	/** Poll cursor from the endpoint's persisted state. */
 	cursor?: JsonValue;
-	/** Bind defaults for conversations on this endpoint — the tenant rides `claw.tenantId`. */
+	/**
+	 * Bind defaults for conversations on this endpoint — set by channelConnections from the row
+	 * (tenant on `claw.tenantId`). The app's own bots carry none: conversations create bare personal
+	 * claws, and hosts that want placement pre-bind through the public bindConversation api.
+	 */
 	claw?: BindConversationClawInput;
 	thread?: BindConversationThreadInput;
 };
@@ -90,11 +94,6 @@ export interface Channel {
 	readonly supports: { readonly webhook: boolean; readonly poll: boolean };
 	/** Endpoints declared in code — the app's own bots; their clients live on the channel. */
 	readonly codeEndpoints: readonly CodeEndpoint[];
-	/** Bind defaults merged into every conversation this channel opens (tenant on `claw.tenantId`). */
-	readonly bind?: {
-		readonly claw?: BindConversationClawInput;
-		readonly thread?: BindConversationThreadInput;
-	};
 	/** Extract the endpoint key from a request (default: the route key). Fan-in overrides. */
 	identify?: (request: InboundRequest) => string | undefined;
 	/**

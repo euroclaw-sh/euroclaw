@@ -27,7 +27,8 @@ describe("model extension — derived types", () => {
 		expectTypeOf<ClawA["priority"]>().toEqualTypeOf<number | undefined>();
 		expectTypeOf<ClawA["id"]>().toEqualTypeOf<string>(); // base field still present
 		expectTypeOf<CreateA["priority"]>().toEqualTypeOf<number | undefined>();
-		expectTypeOf<CreateA["tenantId"]>().toEqualTypeOf<string>();
+		// tenancy is opt-in claw data, not a required core column
+		expectTypeOf<CreateA["tenantId"]>().toEqualTypeOf<string | undefined>();
 		expectTypeOf<ClawA>().not.toHaveProperty("nope"); // undeclared field never appears
 	});
 

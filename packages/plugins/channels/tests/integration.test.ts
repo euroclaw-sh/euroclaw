@@ -29,19 +29,9 @@ function textModel(text: string): V2Model {
 	};
 }
 
-function fakeClient() {
-	return {
-		getUpdates: async () => [],
-		sendMessage: async () => ({}),
-	};
-}
-
 function appBot() {
-	return telegram({
-		client: fakeClient(),
-		webhook: { secret: "hook" },
-		claw: { tenantId: "acme" },
-	});
+	// the app's own bot: a token is the whole config — webhook verification derives from it
+	return telegram({ token: "app-token" });
 }
 
 describe("channels ↔ euroclaw integration", () => {
@@ -103,14 +93,7 @@ describe("channels ↔ euroclaw integration", () => {
 
 	it("rejects two channels for the same provider — webhook dispatch is by provider", () => {
 		expect(() =>
-			channels([
-				appBot(),
-				telegram({
-					client: fakeClient(),
-					endpointKey: "other",
-					claw: { tenantId: "globex" },
-				}),
-			]),
+			channels([appBot(), telegram({ endpointKey: "other" })]),
 		).toThrow(/duplicate channel provider/);
 	});
 

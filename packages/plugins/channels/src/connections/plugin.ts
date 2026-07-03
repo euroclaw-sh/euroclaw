@@ -140,13 +140,11 @@ function buildPlugin(
 	};
 
 	// The row's bind-defaults JSON crossed a trust boundary (the registration api wrote it), so the
-	// merged claw/thread defaults are arktype-validated here before they reach bindConversation.
+	// claw/thread defaults are arktype-validated here before they reach bindConversation.
 	const clawDefaults = (
-		channel: Channel,
 		row: ChannelConnectionRecord,
 	): BindConversationClawInput | undefined => {
 		const merged = {
-			...channel.bind?.claw,
 			...row.claw,
 			...(row.tenantId !== undefined ? { tenantId: row.tenantId } : {}),
 		};
@@ -162,12 +160,11 @@ function buildPlugin(
 		return valid;
 	};
 	const threadDefaults = (
-		channel: Channel,
 		row: ChannelConnectionRecord,
 	): BindConversationThreadInput | undefined => {
-		const merged = { ...channel.bind?.thread, ...row.thread };
-		if (Object.keys(merged).length === 0) return undefined;
-		const valid = bindConversationThreadInput(merged);
+		if (row.thread === undefined || Object.keys(row.thread).length === 0)
+			return undefined;
+		const valid = bindConversationThreadInput(row.thread);
 		if (valid instanceof type.errors) {
 			throw validationError(
 				"channel connection thread defaults invalid",
@@ -178,18 +175,15 @@ function buildPlugin(
 		return valid;
 	};
 
-	const contextFor = (
-		channel: Channel,
-		row: ChannelConnectionRecord,
-	): EndpointContext => ({
+	const contextFor = (row: ChannelConnectionRecord): EndpointContext => ({
 		provider: row.provider,
 		endpointKey: row.endpointKey,
 		mode: row.mode,
 		secret: row.secret,
 		webhookSecret: row.webhookSecret,
 		cursor: row.cursor,
-		claw: clawDefaults(channel, row),
-		thread: threadDefaults(channel, row),
+		claw: clawDefaults(row),
+		thread: threadDefaults(row),
 	});
 
 	const register = async (
@@ -236,7 +230,7 @@ function buildPlugin(
 			const result = await dispatchWebhook({
 				claw: claw as Claw,
 				channel,
-				endpoint: contextFor(channel, row),
+				endpoint: contextFor(row),
 				request: { headers: request.headers, rawBody },
 				persist: (event) =>
 					requireStore().record(
@@ -262,7 +256,7 @@ function buildPlugin(
 				const result = await pollEndpoint({
 					claw: claw as Claw,
 					channel,
-					endpoint: contextFor(channel, row),
+					endpoint: contextFor(row),
 					limit,
 					persist: (event) =>
 						requireStore().record(

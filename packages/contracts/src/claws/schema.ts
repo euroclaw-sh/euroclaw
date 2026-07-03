@@ -52,7 +52,10 @@ export const clawFields = {
 	// Identity + ownership are set at create and never updated — immutable (the update input derives
 	// around them, and the storage layer rejects an update that touches them).
 	id: field.string({ required: true, unique: true, immutable: true }),
-	tenantId: field.string({ required: true, index: true, immutable: true }),
+	// Tenancy is opt-in, not core-required (better-auth: the user table has no org column; tenancy
+	// arrives with the organization plugin). Hosts that partition by tenant set it; a personal claw
+	// may carry only its owner.
+	tenantId: field.string({ index: true, immutable: true }),
 	teamId: field.string({ index: true, immutable: true }),
 	ownerActorId: field.string({ index: true, immutable: true }),
 	status: field.enum(clawStatusValues, { required: true }),
@@ -73,7 +76,8 @@ export const threadFields = {
 		immutable: true,
 		references: { model: "claw", field: "id" },
 	}),
-	tenantId: field.string({ required: true, index: true, immutable: true }),
+	// Follows the claw's (optional) tenancy — see clawFields.tenantId.
+	tenantId: field.string({ index: true, immutable: true }),
 	teamId: field.string({ index: true, immutable: true }),
 	ownerActorId: field.string({ index: true, immutable: true }),
 	title: field.string(),

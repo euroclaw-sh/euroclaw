@@ -229,9 +229,9 @@ const engineRunMetadataOrUndefined = engineRunMetadataInput.or("undefined");
 // leaks into the tool-call patch).
 const updateClawPatchInput = clawEntity.updateSchema();
 const toolCallStatusPatchInput = toolCallEntity.updateSchema();
-// Claw bind defaults carry tenantId: the tenant is claw-creation data ("conversations from this
-// endpoint create claws in acme"), not part of the binding's identity — bindings are keyed by the
-// endpoint, and whose data a conversation is lives on the claw it points at.
+// Claw bind defaults may carry tenantId: tenancy is optional claw-creation data, never part of the
+// binding's identity — bindings are keyed by the endpoint, and whose data a conversation is lives on
+// the claw it points at.
 export const bindConversationClawInput = clawEntity.schema({
 	omit: ["status", "createdAt", "updatedAt"],
 	optional: ["id", "context"],
@@ -530,25 +530,16 @@ export function createClawApi<Config extends RuntimeConfig>(input: {
 			const existingThread = args.threadId
 				? await requireThreadRecord(clawsStore, args.threadId)
 				: undefined;
-			// A new claw's tenant comes from the claw bind defaults (which carry tenantId); when an
-			// existing claw/thread is bound instead, that claw is the tenancy source of truth.
-			const createClawFromDefaults = () => {
-				if (!args.claw) {
-					throw validationError(
-						"bind conversation input invalid",
-						"creating a claw for a new binding requires claw defaults (with tenantId)",
-					);
-				}
-				return clawsStore.claws.create({
-					...args.claw,
-					ownerActorId: args.claw.ownerActorId ?? args.externalActorId,
-				});
-			};
+			// A fresh binding creates a personal claw owned by the external actor; tenancy (optional)
+			// rides the claw defaults. Binding an existing claw/thread makes that claw the source of truth.
 			const claw = args.clawId
 				? await requireClawRecord(clawsStore, args.clawId)
 				: existingThread
 					? await requireClawRecord(clawsStore, existingThread.clawId)
-					: await createClawFromDefaults();
+					: await clawsStore.claws.create({
+							...args.claw,
+							ownerActorId: args.claw?.ownerActorId ?? args.externalActorId,
+						});
 
 			const thread = existingThread
 				? existingThread

@@ -297,28 +297,28 @@ describe("channelConnections plugin", () => {
 		expect(second).toMatchObject({ processed: 0, status: "idle" });
 	});
 
-	it("fails loudly when a connection's bind scope has no tenant", async () => {
+	it("binds tenantless connections fine — tenancy is opt-in row data", async () => {
+		const recorded = { binds: [] as unknown[], relayed: [] as string[] };
 		const plugin = configured(channelConnections([fakeChannel()]));
 		const api = plugin.api?.({}) as {
 			channels: {
 				connections: { register: (input: unknown) => Promise<unknown> };
 			};
 		};
-		// claw defaults without a tenant anywhere — the merged defaults fail validation at dispatch
 		await api.channels.connections.register({
 			provider: "fake",
-			endpointKey: "no-tenant",
+			endpointKey: "personal-bot",
 			mode: "webhook",
-			claw: { name: "Orphan bot" },
+			claw: { name: "Personal bot" },
 		});
 		const route = plugin.routes?.[0];
 		if (!route) throw new Error("expected the connections webhook route");
-		await expect(
-			route.handler({
-				claw: fakeClaw({ binds: [], relayed: [] }),
-				params: { provider: "fake", endpointKey: "no-tenant" },
-				request: webhookRequest({ body: "hello" }),
-			}),
-		).rejects.toThrow(/claw defaults invalid/);
+		const result = await route.handler({
+			claw: fakeClaw(recorded),
+			params: { provider: "fake", endpointKey: "personal-bot" },
+			request: webhookRequest({ body: "hello" }),
+		});
+		expect(result.status).toBe(200);
+		expect(recorded.binds).toMatchObject([{ claw: { name: "Personal bot" } }]);
 	});
 });

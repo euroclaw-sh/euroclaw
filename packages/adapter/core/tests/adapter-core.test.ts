@@ -268,7 +268,8 @@ describe("@euroclaw/adapter-core", () => {
 
 		const response = await handler(
 			new Request("https://app.test/api/euroclaw/create-claw", {
-				body: JSON.stringify({ id: "claw-1" }),
+				// id must be a string — type-invalid input is rejected before the api is touched
+				body: JSON.stringify({ id: 42 }),
 				method: "POST",
 			}),
 		);
@@ -315,7 +316,7 @@ describe("@euroclaw/adapter-core", () => {
 			},
 		});
 
-		await expect(client.createClaw({ id: "claw-1" } as never)).rejects.toThrow(
+		await expect(client.createClaw({ id: 42 } as never)).rejects.toThrow(
 			/claw\.api\.createClaw input/,
 		);
 	});
