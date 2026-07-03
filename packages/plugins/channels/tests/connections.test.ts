@@ -1,9 +1,15 @@
-import { memoryAdapter } from "@euroclaw/storage-core";
+import { memoryAdapter, schemaAdapter } from "@euroclaw/storage-core";
 import { describe, expect, it } from "vitest";
 import {
 	channelConnections,
+	channelConnectionsSchema,
 	createChannelConnectionsStore,
 } from "../src/connections/index";
+
+// Stores and the configure context take the schema-aware adapter the assembly provides in
+// production; tests wrap manually.
+const db = () => schemaAdapter(memoryAdapter(), channelConnectionsSchema);
+
 import { type Channel, endpointId } from "../src/index";
 
 const now = () => "2026-01-01T00:00:00.000Z";
@@ -46,7 +52,7 @@ function fakeChannel(overrides: Partial<Channel> = {}): Channel {
 
 /** Configure the plugin against a bare adapter — what the createClaw assembly does. */
 function configured(plugin: ReturnType<typeof channelConnections>) {
-	const built = plugin.configure?.({ adapter: memoryAdapter() });
+	const built = plugin.configure?.({ adapter: db() });
 	if (!built) throw new Error("expected configure to build the plugin");
 	return built;
 }
@@ -66,7 +72,7 @@ function webhookRequest(input: { body: string; secret?: string }) {
 
 describe("createChannelConnectionsStore", () => {
 	it("registers with a key-derived id, rotates in place, and revokes softly", async () => {
-		const store = createChannelConnectionsStore(memoryAdapter(), { now });
+		const store = createChannelConnectionsStore(db(), { now });
 		const first = await store.register({
 			provider: "telegram",
 			endpointKey: "acme-bot",
@@ -110,7 +116,7 @@ describe("createChannelConnectionsStore", () => {
 	});
 
 	it("lists by tenant — the organizationId-style link", async () => {
-		const store = createChannelConnectionsStore(memoryAdapter(), { now });
+		const store = createChannelConnectionsStore(db(), { now });
 		await store.register({
 			provider: "telegram",
 			endpointKey: "acme-bot",

@@ -152,9 +152,6 @@ importers:
       '@euroclaw/contracts':
         specifier: workspace:*
         version: link:../../foundation/contracts
-      '@euroclaw/storage-core':
-        specifier: workspace:*
-        version: link:../../storage/core
       '@noble/hashes':
         specifier: 2.2.0
         version: 2.2.0
@@ -165,6 +162,9 @@ importers:
       '@euroclaw/core':
         specifier: workspace:*
         version: link:../../foundation/core
+      '@euroclaw/storage-core':
+        specifier: workspace:*
+        version: link:../../storage/core
       '@euroclaw/storage-durable':
         specifier: workspace:*
         version: link:../../storage/durable
@@ -180,12 +180,6 @@ importers:
       '@euroclaw/contracts':
         specifier: workspace:*
         version: link:../../foundation/contracts
-      '@euroclaw/errors':
-        specifier: workspace:*
-        version: link:../../foundation/errors
-      '@euroclaw/storage-core':
-        specifier: workspace:*
-        version: link:../../storage/core
       '@noble/hashes':
         specifier: 2.2.0
         version: 2.2.0
@@ -196,6 +190,9 @@ importers:
       '@euroclaw/core':
         specifier: workspace:*
         version: link:../../foundation/core
+      '@euroclaw/storage-core':
+        specifier: workspace:*
+        version: link:../../storage/core
 
   packages/policy/better-auth:
     dependencies:
@@ -283,6 +280,9 @@ importers:
 
   packages/storage/core:
     dependencies:
+      '@euroclaw/contracts':
+        specifier: workspace:*
+        version: link:../../foundation/contracts
       '@euroclaw/errors':
         specifier: workspace:*
         version: link:../../foundation/errors

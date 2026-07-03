@@ -1,13 +1,10 @@
 import {
+	type Adapter,
 	type EntityRecord,
 	type EntitySchemaInput,
 	validationError,
-} from "@euroclaw/contracts";
-import {
-	type Adapter,
-	schemaAdapter,
 	type Where,
-} from "@euroclaw/storage-core";
+} from "@euroclaw/contracts";
 import { type } from "arktype";
 import type { ChannelEndpointMode, EndpointEvent } from "../core/contracts";
 import { endpointId } from "../core/id";
@@ -16,7 +13,6 @@ import {
 	channelConnectionLookupInput,
 	channelConnectionRecord,
 	type channelConnectionStatusValues,
-	channelConnectionsSchema,
 	registerChannelConnectionInput,
 	type registerChannelConnectionInputOptions,
 	updateChannelConnectionInput,
@@ -116,11 +112,11 @@ function listWhere(filter: ChannelConnectionListFilter): Where[] {
 
 /** The connection registry — user-registered bots persisted through a schema-aware adapter. */
 export function createChannelConnectionsStore(
-	adapter: Adapter,
+	// The schema-aware adapter the assembly hands through the configure context; tests wrap manually.
+	db: Adapter,
 	options: ChannelConnectionsStoreOptions = {},
 ): ChannelConnectionsStore {
 	const now = options.now ?? (() => new Date().toISOString());
-	const db = schemaAdapter(adapter, channelConnectionsSchema);
 
 	const patchByKey = async (
 		lookup: ChannelConnectionLookup,

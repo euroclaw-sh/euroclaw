@@ -1,9 +1,9 @@
 import {
+	type Adapter,
 	type EntityRecord,
 	type EntityUpdateInput,
 	validationError,
 } from "@euroclaw/contracts";
-import { type Adapter, schemaAdapter } from "@euroclaw/storage-core";
 import { type } from "arktype";
 import type { ChannelEndpointMode, EndpointEvent } from "../core/contracts";
 import { endpointId } from "../core/id";
@@ -11,7 +11,6 @@ import {
 	type channelEndpointFields,
 	channelEndpointRecord,
 	channelEndpointStatePatch,
-	channelsSchema,
 } from "./schema";
 
 export type ChannelEndpointStateRecord = EntityRecord<
@@ -59,11 +58,12 @@ function assertStatePatch(input: unknown): ChannelEndpointStatePatch {
 
 /** The state store for code-declared bots: one row per endpoint, keyed by hash(provider, key). */
 export function createChannelEndpointStateStore(
-	adapter: Adapter,
+	// The schema-aware adapter the assembly hands through the configure context (logical model/field
+	// names, JSON encode/decode, immutable enforcement). Tests wrap manually: schemaAdapter(memoryAdapter(), channelsSchema).
+	db: Adapter,
 	options: ChannelEndpointStateStoreOptions = {},
 ): ChannelEndpointStateStore {
 	const now = options.now ?? (() => new Date().toISOString());
-	const db = schemaAdapter(adapter, channelsSchema);
 
 	const eventPatch = (event: EndpointEvent): ChannelEndpointStatePatch => {
 		switch (event.kind) {

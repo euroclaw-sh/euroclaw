@@ -1,3 +1,4 @@
+import type { Adapter } from "@euroclaw/contracts";
 import {
 	configurationError,
 	defineReasonCodes,
@@ -7,7 +8,6 @@ import {
 	type ToolCall,
 	type TurnContext,
 } from "@euroclaw/contracts";
-import type { Adapter } from "@euroclaw/storage-core";
 import { type SkillsStore, skillsModels } from "../core";
 import { createSkillsStore } from "../store/store";
 import type {

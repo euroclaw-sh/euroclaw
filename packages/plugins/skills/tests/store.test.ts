@@ -1,6 +1,10 @@
-import { memoryAdapter } from "@euroclaw/storage-core";
+import { memoryAdapter, schemaAdapter } from "@euroclaw/storage-core";
 import { describe, expect, it } from "vitest";
+import { skillsSchema } from "../src/core/index";
 import { createSkillsStore } from "../src/store/store";
+
+// Stores take the schema-aware adapter the assembly provides; tests wrap manually.
+const db = () => schemaAdapter(memoryAdapter(), skillsSchema);
 
 const manifest = {
 	id: "summarize-thread",
@@ -10,7 +14,7 @@ const manifest = {
 
 describe("createSkillsStore", () => {
 	it("stores packages, installations, acl, activations, reads, and proposals", async () => {
-		const store = createSkillsStore(memoryAdapter(), {
+		const store = createSkillsStore(db(), {
 			now: () => "2026-01-01T00:00:00.000Z",
 		});
 
@@ -130,7 +134,7 @@ describe("createSkillsStore", () => {
 	});
 
 	it("rejects malformed package manifests", async () => {
-		const store = createSkillsStore(memoryAdapter());
+		const store = createSkillsStore(db());
 
 		await expect(
 			store.packages.create({

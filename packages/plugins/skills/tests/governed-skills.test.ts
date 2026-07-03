@@ -1,10 +1,14 @@
-import { memoryAdapter } from "@euroclaw/storage-core";
+import { memoryAdapter, schemaAdapter } from "@euroclaw/storage-core";
 import { describe, expect, it } from "vitest";
+import { skillsSchema } from "../src/core/index";
 import { createGovernedSkillsApi, createSkillsStore } from "../src/index";
+
+// Stores take the schema-aware adapter the assembly provides; tests wrap manually.
+const db = () => schemaAdapter(memoryAdapter(), skillsSchema);
 
 describe("@euroclaw/skills (governed)", () => {
 	it("creates a nested skills API over a SkillsStore", async () => {
-		const store = createSkillsStore(memoryAdapter(), {
+		const store = createSkillsStore(db(), {
 			now: () => "2026-01-01T00:00:00.000Z",
 		});
 		const api = createGovernedSkillsApi(store);
@@ -39,7 +43,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("hardens package manifests created through the skills API", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()));
+		const api = createGovernedSkillsApi(createSkillsStore(db()));
 
 		await expect(
 			api.packages.create({
@@ -57,7 +61,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("returns compact installed catalog entries scoped by tenant", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()));
+		const api = createGovernedSkillsApi(createSkillsStore(db()));
 		const pkg = await api.packages.create({
 			packageId: "team.email-only",
 			version: "1.0.0",
@@ -111,7 +115,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("reads personal DB-backed skills and persists read records", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()), {
+		const api = createGovernedSkillsApi(createSkillsStore(db()), {
 			readContext: {
 				readBy: "actor-1",
 				tenantId: "tenant-1",
@@ -165,7 +169,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("records static skill reads when a store and read context are available", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()), {
+		const api = createGovernedSkillsApi(createSkillsStore(db()), {
 			readContext: {
 				readBy: "actor-1",
 				tenantId: "tenant-1",
@@ -202,7 +206,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("requires trusted read context and read ACL for DB-backed skills", async () => {
-		const store = createSkillsStore(memoryAdapter());
+		const store = createSkillsStore(db());
 		const apiWithoutContext = createGovernedSkillsApi(store);
 		const api = createGovernedSkillsApi(store, {
 			readContext: {
@@ -259,7 +263,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("rejects reads for unavailable installed skills", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()), {
+		const api = createGovernedSkillsApi(createSkillsStore(db()), {
 			readContext: {
 				readBy: "actor-1",
 				tenantId: "tenant-1",
@@ -295,7 +299,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("creates private personal skills", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()));
+		const api = createGovernedSkillsApi(createSkillsStore(db()));
 
 		const result = await api.createPersonal({
 			digest: "sha256:personal",
@@ -341,7 +345,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("proposes sharing until approved, then grants", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()));
+		const api = createGovernedSkillsApi(createSkillsStore(db()));
 		const personal = await api.createPersonal({
 			digest: "sha256:governed-share",
 			manifest: {
@@ -407,7 +411,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("requestShare always records a share proposal", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()));
+		const api = createGovernedSkillsApi(createSkillsStore(db()));
 		const personal = await api.createPersonal({
 			digest: "sha256:request-share",
 			manifest: {
@@ -439,7 +443,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("validates share principals before writing grants or proposals", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()));
+		const api = createGovernedSkillsApi(createSkillsStore(db()));
 		const personal = await api.createPersonal({
 			digest: "sha256:bad-share",
 			manifest: {
@@ -473,7 +477,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("installs packages through the lifecycle helper", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()));
+		const api = createGovernedSkillsApi(createSkillsStore(db()));
 		const pkg = await api.packages.create({
 			packageId: "team.email-only",
 			version: "1.0.0",
@@ -504,7 +508,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("rejects installs without matching packages", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()));
+		const api = createGovernedSkillsApi(createSkillsStore(db()));
 
 		await expect(
 			api.install({
@@ -516,7 +520,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("enforces trust and enable transitions", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()));
+		const api = createGovernedSkillsApi(createSkillsStore(db()));
 		const pkg = await api.packages.create({
 			packageId: "team.email-only",
 			version: "1.0.0",
@@ -560,7 +564,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("checks activation grants before writing ACL records", async () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()));
+		const api = createGovernedSkillsApi(createSkillsStore(db()));
 		const pkg = await api.packages.create({
 			packageId: "team.email-only",
 			version: "1.0.0",
@@ -617,7 +621,7 @@ describe("@euroclaw/skills (governed)", () => {
 	});
 
 	it("does not expose raw activation creation on the public skills API", () => {
-		const api = createGovernedSkillsApi(createSkillsStore(memoryAdapter()));
+		const api = createGovernedSkillsApi(createSkillsStore(db()));
 
 		expect("create" in api.activations).toBe(false);
 	});

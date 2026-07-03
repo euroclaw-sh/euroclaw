@@ -1,5 +1,5 @@
+import type { SchemaDeclaration } from "@euroclaw/contracts";
 import { type EntityField, entity, field } from "@euroclaw/contracts";
-import type { SchemaDeclaration } from "@euroclaw/storage-core";
 import { type } from "arktype";
 
 // ── Manifest constraint vocabulary ───────────────────────────────────────────

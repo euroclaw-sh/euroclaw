@@ -1,9 +1,4 @@
-import { validationError } from "@euroclaw/errors";
-import {
-	type Adapter,
-	schemaAdapter,
-	type Where,
-} from "@euroclaw/storage-core";
+import { type Adapter, validationError, type Where } from "@euroclaw/contracts";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils.js";
 import { type } from "arktype";
 import {
@@ -35,7 +30,6 @@ import {
 	skillPackageRecord,
 	skillProposalRecord,
 	skillReadRecord,
-	skillsSchema,
 } from "../core";
 
 export type SkillsStoreOptions = {
@@ -176,11 +170,11 @@ function assertSkillProposalRecord(input: unknown): SkillProposalRecord {
 }
 
 export function createSkillsStore(
-	adapter: Adapter,
+	// The schema-aware adapter the assembly hands through the configure context; tests wrap manually.
+	db: Adapter,
 	options: SkillsStoreOptions = {},
 ): SkillsStore {
 	const now = options.now ?? (() => new Date().toISOString());
-	const db = schemaAdapter(adapter, skillsSchema);
 
 	return {
 		packages: {

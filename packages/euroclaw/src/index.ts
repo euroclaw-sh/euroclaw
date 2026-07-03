@@ -22,6 +22,7 @@ import {
 	type RuntimeEventSink,
 	resolveDatabase,
 } from "@euroclaw/runtime";
+import { schemaAdapter } from "@euroclaw/storage-core";
 import { createClawsStore, createEffectStore } from "@euroclaw/storage-durable";
 import { type as ark } from "arktype";
 import {
@@ -296,8 +297,12 @@ export function createClaw<const Config extends ClawConfig<RuntimeConfig>>(
 		: undefined;
 	const pluginList = (config.plugins ?? []) as readonly EuroclawPlugin[];
 	// Fail fast at init if any plugin/host schema collides with a core column — the same collection the
-	// `generate` CLI runs, so a bad registration surfaces here, not at migration time.
-	getEuroclawTables({ models: config.models, plugins: pluginList });
+	// `generate` CLI runs, so a bad registration surfaces here, not at migration time. The merged
+	// tables also drive the schema-aware adapter handed to plugins below.
+	const tables = getEuroclawTables({
+		models: config.models,
+		plugins: pluginList,
+	});
 	const modelFields = collectModelFields(pluginList, config.models);
 	const clawAdditionalFields = modelFields.claw;
 	const clawsStore =
@@ -322,9 +327,11 @@ export function createClaw<const Config extends ClawConfig<RuntimeConfig>>(
 	];
 	const configuredPlugins = configurePlugins({
 		context: {
-			// The resolved adapter, passed through the configure context's index signature so a plugin
-			// that owns tables (e.g. skills) can build its own store — core never creates a plugin store.
-			adapter,
+			// The resolved adapter, wrapped ONCE with the merged tables (better-auth builds its adapter
+			// with the full getAuthTables schema the same way) and passed through the configure context's
+			// index signature. Plugins that own tables build their stores on it directly — they speak
+			// logical model/field names and never wrap adapters themselves.
+			adapter: adapter ? schemaAdapter(adapter, tables) : undefined,
 			clawsStore,
 			effects: effectsStore,
 			events: pluginEventSink(eventSinks),

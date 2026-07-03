@@ -1,4 +1,5 @@
 import {
+	type Adapter,
 	configurationError,
 	type EuroclawCronFlag,
 	type EuroclawPlugin,
@@ -6,7 +7,6 @@ import {
 	type EuroclawRoute,
 	type EuroclawRouteContext,
 } from "@euroclaw/contracts";
-import type { Adapter } from "@euroclaw/storage-core";
 import { requireClaw } from "../core/claw";
 import type { Channel, EndpointContext } from "../core/contracts";
 import { dispatchWebhook, pollEndpoint } from "../core/dispatch";

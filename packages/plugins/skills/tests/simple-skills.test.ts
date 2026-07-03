@@ -7,8 +7,9 @@ import {
 	THREAD_ID_CONTEXT_KEY,
 } from "@euroclaw/contracts";
 import { createGovernance, createMemoryAudit } from "@euroclaw/core";
-import { memoryAdapter } from "@euroclaw/storage-core";
+import { memoryAdapter, schemaAdapter } from "@euroclaw/storage-core";
 import { describe, expect, it } from "vitest";
+import { skillsSchema } from "../src/core/index";
 import {
 	assertSkillManifest,
 	createSimpleSkillsApi,
@@ -18,6 +19,9 @@ import {
 	skillManifestLimits,
 	skillsPlugin,
 } from "../src/index";
+
+// Stores take the schema-aware adapter the assembly provides; tests wrap manually.
+const db = () => schemaAdapter(memoryAdapter(), skillsSchema);
 
 describe("@euroclaw/skills (simple)", () => {
 	it("rejects unsafe manifest ids", () => {
@@ -134,7 +138,7 @@ describe("@euroclaw/skills (simple)", () => {
 	});
 
 	it("creates and reads private personal skills through read ACL", async () => {
-		const api = createSimpleSkillsApi(createSkillsStore(memoryAdapter()), {
+		const api = createSimpleSkillsApi(createSkillsStore(db()), {
 			readContext: {
 				readBy: "actor-1",
 				tenantId: "tenant-1",
@@ -190,7 +194,7 @@ describe("@euroclaw/skills (simple)", () => {
 	});
 
 	it("activates personal skills through the simple API", async () => {
-		const store = createSkillsStore(memoryAdapter(), {
+		const store = createSkillsStore(db(), {
 			now: () => "2026-01-01T00:00:00.000Z",
 		});
 		const api = createSimpleSkillsApi(store, {
@@ -226,7 +230,7 @@ describe("@euroclaw/skills (simple)", () => {
 	});
 
 	it("does not authorize activation from caller-supplied principal fields", async () => {
-		const api = createSimpleSkillsApi(createSkillsStore(memoryAdapter()), {
+		const api = createSimpleSkillsApi(createSkillsStore(db()), {
 			activationContext: {
 				activatedBy: "actor-1",
 				tenantId: "tenant-1",
@@ -256,7 +260,7 @@ describe("@euroclaw/skills (simple)", () => {
 	});
 
 	it("requires trusted activation context", async () => {
-		const api = createSimpleSkillsApi(createSkillsStore(memoryAdapter()));
+		const api = createSimpleSkillsApi(createSkillsStore(db()));
 
 		await expect(
 			api.activate({
@@ -425,7 +429,7 @@ describe("@euroclaw/skills (simple)", () => {
 
 	it("permits tools from enabled database-backed skill installations", async () => {
 		let ran = false;
-		const store = createSkillsStore(memoryAdapter(), {
+		const store = createSkillsStore(db(), {
 			now: () => "2026-01-01T00:00:00.000Z",
 		});
 		const pkg = await store.packages.create({
@@ -487,7 +491,7 @@ describe("@euroclaw/skills (simple)", () => {
 			"tenant",
 			"public",
 		] as const) {
-			const store = createSkillsStore(memoryAdapter());
+			const store = createSkillsStore(db());
 			const pkg = await store.packages.create({
 				packageId: `team.${principalType}.email-only`,
 				version: "1.0.0",
@@ -541,7 +545,7 @@ describe("@euroclaw/skills (simple)", () => {
 
 	it("uses recorded run activations when active selection is omitted", async () => {
 		let ran = false;
-		const store = createSkillsStore(memoryAdapter());
+		const store = createSkillsStore(db());
 		const foreignPkg = await store.packages.create({
 			packageId: "team.foreign-email",
 			version: "1.0.0",
@@ -660,7 +664,7 @@ describe("@euroclaw/skills (simple)", () => {
 	});
 
 	it("resolves tenant refs past unauthorized matching installations", async () => {
-		const store = createSkillsStore(memoryAdapter());
+		const store = createSkillsStore(db());
 		const firstPkg = await store.packages.create({
 			packageId: "team.first-email",
 			version: "1.0.0",
@@ -727,7 +731,7 @@ describe("@euroclaw/skills (simple)", () => {
 	});
 
 	it("denies database-backed skills without an activate ACL grant", async () => {
-		const store = createSkillsStore(memoryAdapter());
+		const store = createSkillsStore(db());
 		const pkg = await store.packages.create({
 			packageId: "team.email-only",
 			version: "1.0.0",
@@ -771,7 +775,7 @@ describe("@euroclaw/skills (simple)", () => {
 	});
 
 	it("denies database-backed skills without tenant context", async () => {
-		const store = createSkillsStore(memoryAdapter());
+		const store = createSkillsStore(db());
 		const ec = createGovernance({
 			plugins: [
 				skillsPlugin({
@@ -792,7 +796,7 @@ describe("@euroclaw/skills (simple)", () => {
 	});
 
 	it("denies untrusted database-backed skill installations", async () => {
-		const store = createSkillsStore(memoryAdapter());
+		const store = createSkillsStore(db());
 		const pkg = await store.packages.create({
 			id: "pkg-untrusted",
 			packageId: "team.email-only",

@@ -1,5 +1,5 @@
+import type { SchemaDeclaration } from "@euroclaw/contracts";
 import { type EntityField, entity, field } from "@euroclaw/contracts";
-import type { SchemaDeclaration } from "@euroclaw/storage-core";
 import { channelEndpointModeValues } from "../core/contracts";
 
 // A channel connection is a USER-registered bot — the ssoProvider analog: registered at runtime,

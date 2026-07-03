@@ -1,5 +1,5 @@
+import type { SchemaDeclaration } from "@euroclaw/contracts";
 import { type EntityField, entity, field } from "@euroclaw/contracts";
-import type { SchemaDeclaration } from "@euroclaw/storage-core";
 import { channelEndpointModeValues } from "../core/contracts";
 
 // Operational STATE for the app's own (code-declared) bots — the account-side of the split. No
