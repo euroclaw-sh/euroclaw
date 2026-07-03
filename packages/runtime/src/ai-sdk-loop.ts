@@ -1,5 +1,5 @@
+import { configurationError, stateError } from "@euroclaw/contracts";
 import type { Governance } from "@euroclaw/core";
-import { configurationError, stateError } from "@euroclaw/errors";
 import type { ModelMessage, ToolSet } from "ai";
 import { generateText, stepCountIs, wrapLanguageModel } from "ai";
 import type { RuntimeEventPayloadInput } from "./events";

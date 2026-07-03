@@ -8,8 +8,8 @@
  * Prisma's public delegate API. MIT, © 2024-present Bereket Engida. See THIRD_PARTY_NOTICES.md.
  */
 
-import { configurationError } from "@euroclaw/errors";
-import type { Adapter, Where } from "@euroclaw/storage-core";
+import type { Adapter, Where } from "@euroclaw/contracts";
+import { configurationError } from "@euroclaw/contracts";
 
 /** The subset of a Prisma model delegate this adapter uses (your generated client satisfies it). */
 export type PrismaDelegate = {

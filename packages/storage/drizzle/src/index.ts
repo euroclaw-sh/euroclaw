@@ -7,8 +7,8 @@
  * Drizzle's public API. MIT, © 2024-present Bereket Engida. See THIRD_PARTY_NOTICES.md.
  */
 
-import { configurationError } from "@euroclaw/errors";
-import type { Adapter, Where } from "@euroclaw/storage-core";
+import type { Adapter, Where } from "@euroclaw/contracts";
+import { configurationError } from "@euroclaw/contracts";
 import {
 	and,
 	asc,

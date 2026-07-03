@@ -3,6 +3,7 @@
 // convention — no global prefix); override a physical name per-table via `modelName` if it
 // collides with a host-app table. `id` is the unique required key consumeOne deletes by.
 
+import type { SchemaDeclaration } from "@euroclaw/contracts";
 import {
 	approvalSchema,
 	effectSchema,
@@ -11,7 +12,6 @@ import {
 	piiMappingSchema,
 	runCheckpointSchema,
 } from "@euroclaw/contracts";
-import type { SchemaDeclaration } from "@euroclaw/storage-core";
 
 const teamMemberEntity = entity("team_member", {
 	id: field.string({ required: true, unique: true }),

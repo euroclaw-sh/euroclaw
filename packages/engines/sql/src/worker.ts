@@ -15,7 +15,7 @@ import {
 	stateError,
 	unsupportedOperationError,
 	validationError,
-} from "@euroclaw/errors";
+} from "@euroclaw/contracts";
 import {
 	type Runtime,
 	type RuntimeAbortSignal,

@@ -9,7 +9,7 @@
 // never permits calling it — every call still routes through the governance
 // chokepoint (handleToolCall). tools-plan.md invariant #8.
 
-import { validationError } from "@euroclaw/errors";
+import { validationError } from "@euroclaw/contracts";
 import { type } from "arktype";
 
 const ADDRESS_SEP = ".";

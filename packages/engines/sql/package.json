@@ -24,7 +24,6 @@
 	},
 	"dependencies": {
 		"@euroclaw/contracts": "workspace:*",
-		"@euroclaw/errors": "workspace:*",
 		"@euroclaw/runtime": "workspace:*",
 		"@euroclaw/storage-core": "workspace:*",
 		"@noble/hashes": "2.2.0",

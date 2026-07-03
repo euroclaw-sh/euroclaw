@@ -3,8 +3,8 @@
 // atomic consumeOne primitive) and creates a member. `roleOf` is what a claw's
 // `roleMembership({ roleOf })` calls to resolve the actor's role on a team → which authz then reads.
 
-import { validationError } from "@euroclaw/errors";
-import type { Adapter, Where } from "@euroclaw/storage-core";
+import type { Adapter, Where } from "@euroclaw/contracts";
+import { validationError } from "@euroclaw/contracts";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils.js";
 import { type } from "arktype";
 import { teamInviteRecord, teamMemberRecord } from "./schema";

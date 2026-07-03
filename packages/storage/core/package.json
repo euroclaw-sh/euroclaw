@@ -23,7 +23,6 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@euroclaw/contracts": "workspace:*",
-		"@euroclaw/errors": "workspace:*"
+		"@euroclaw/contracts": "workspace:*"
 	}
 }

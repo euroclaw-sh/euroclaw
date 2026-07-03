@@ -1,4 +1,4 @@
-import type { Adapter } from "@euroclaw/storage-core";
+import type { Adapter } from "@euroclaw/contracts";
 import { type KyselyDatabase, kyselyAdapter } from "@euroclaw/storage-kysely";
 
 /** Durable substrate accepted by runtime. Raw Kysely inputs are wrapped; storage Adapters pass through. */

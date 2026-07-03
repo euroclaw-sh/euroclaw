@@ -11,18 +11,16 @@ import type {
 } from "@euroclaw/contracts";
 import {
 	CLAW_ID_CONTEXT_KEY,
+	configurationError,
 	jsonValue as jsonValueSchema,
 	RESERVED_CONTEXT_PREFIX,
 	RUN_ID_CONTEXT_KEY,
 	redactionContextFrom,
+	stateError,
 	THREAD_ID_CONTEXT_KEY,
+	validationError,
 } from "@euroclaw/contracts";
 import { createGovernance } from "@euroclaw/core";
-import {
-	configurationError,
-	stateError,
-	validationError,
-} from "@euroclaw/errors";
 import {
 	createApprovalStore,
 	createEffectStore,

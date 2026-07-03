@@ -2,7 +2,7 @@ import {
 	configurationError,
 	errorMessage,
 	validationError,
-} from "@euroclaw/errors";
+} from "@euroclaw/contracts";
 import type {
 	Adapter,
 	FieldAttribute,

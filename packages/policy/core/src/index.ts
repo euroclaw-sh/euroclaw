@@ -15,7 +15,7 @@ import type {
 	ToolCall,
 	TurnContext,
 } from "@euroclaw/contracts";
-import { validationError } from "@euroclaw/errors";
+import { validationError } from "@euroclaw/contracts";
 import { type } from "arktype";
 
 export const EntityRef = type({ type: "string", id: "string" });

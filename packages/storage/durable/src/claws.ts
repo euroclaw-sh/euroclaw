@@ -1,3 +1,4 @@
+import type { Adapter, Where } from "@euroclaw/contracts";
 import {
 	type AppendMessageInput,
 	appendMessageInput,
@@ -13,6 +14,7 @@ import {
 	checkpointRecord,
 	clawFields,
 	clawsSchema,
+	configurationError,
 	conversationBindingRecord,
 	createCheckpointInput,
 	createClawInputOptions,
@@ -24,23 +26,16 @@ import {
 	entity,
 	type MessageRecord,
 	messageRecord,
+	stateError,
 	type ThreadRecord,
 	type ToolCallRecord,
 	type ToolResultRecord,
 	threadRecord,
 	toolCallRecord,
 	toolResultRecord,
-} from "@euroclaw/contracts";
-import {
-	configurationError,
-	stateError,
 	validationError,
-} from "@euroclaw/errors";
-import {
-	type Adapter,
-	schemaAdapter,
-	type Where,
-} from "@euroclaw/storage-core";
+} from "@euroclaw/contracts";
+import { schemaAdapter } from "@euroclaw/storage-core";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils.js";
 import { type } from "arktype";
 

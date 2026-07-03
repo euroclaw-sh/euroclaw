@@ -3,6 +3,7 @@
 // by `schemaAdapter` from the effect storage schema, which also drops the storage-only
 // `leaseTokenHash` on read (returned:false) — the store never hand-rolls row mapping.
 
+import type { Adapter } from "@euroclaw/contracts";
 import {
 	type EffectClaim,
 	type EffectRecord,
@@ -10,9 +11,10 @@ import {
 	effectRecord as effectRecordSchema,
 	effectSchema,
 	jsonValue as jsonValueSchema,
+	stateError,
+	validationError,
 } from "@euroclaw/contracts";
-import { stateError, validationError } from "@euroclaw/errors";
-import { type Adapter, schemaAdapter } from "@euroclaw/storage-core";
+import { schemaAdapter } from "@euroclaw/storage-core";
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex, randomBytes, utf8ToBytes } from "@noble/hashes/utils.js";
 import { type } from "arktype";

@@ -13,11 +13,11 @@
  * Kysely's public API. MIT, © 2024-present Bereket Engida. See THIRD_PARTY_NOTICES.md.
  */
 
+import type { Adapter, Where, WhereOperator } from "@euroclaw/contracts";
 import {
 	configurationError,
 	unsupportedOperationError,
-} from "@euroclaw/errors";
-import type { Adapter, Where, WhereOperator } from "@euroclaw/storage-core";
+} from "@euroclaw/contracts";
 import {
 	type Dialect,
 	type Expression,

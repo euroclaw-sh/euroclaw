@@ -23,7 +23,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@euroclaw/storage-core": "workspace:*"
+		"@euroclaw/contracts": "workspace:*"
 	},
 	"peerDependencies": {
 		"mongodb": ">=5.0.0"

@@ -2,7 +2,7 @@
 	"name": "@euroclaw/storage-kysely",
 	"version": "0.0.0",
 	"type": "module",
-	"description": "Kysely adapter for the @euroclaw/storage-core Adapter port — works with any Kysely SQL dialect. Patterns adapted from Better Auth (MIT).",
+	"description": "Kysely adapter for the @euroclaw/storage-core Adapter port \u2014 works with any Kysely SQL dialect. Patterns adapted from Better Auth (MIT).",
 	"license": "MIT",
 	"author": "Konstantin Ponomarev",
 	"exports": {
@@ -23,8 +23,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
-		"@euroclaw/errors": "workspace:*",
-		"@euroclaw/storage-core": "workspace:*"
+		"@euroclaw/contracts": "workspace:*"
 	},
 	"peerDependencies": {
 		"kysely": ">=0.27.0"

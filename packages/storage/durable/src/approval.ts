@@ -4,6 +4,7 @@
 // retries. JSON columns (args, metadata) are (de)serialized by `schemaAdapter` from the entity
 // schema — the store never hand-rolls row mapping.
 
+import type { Adapter, Where } from "@euroclaw/contracts";
 import {
 	type ApprovalRecord,
 	type ApprovalStore,
@@ -11,13 +12,9 @@ import {
 	approvalSchema,
 	type NewApproval,
 	newApproval as newApprovalSchema,
+	validationError,
 } from "@euroclaw/contracts";
-import { validationError } from "@euroclaw/errors";
-import {
-	type Adapter,
-	schemaAdapter,
-	type Where,
-} from "@euroclaw/storage-core";
+import { schemaAdapter } from "@euroclaw/storage-core";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils.js";
 import { type } from "arktype";
 

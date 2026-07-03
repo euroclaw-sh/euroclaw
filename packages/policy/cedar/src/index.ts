@@ -24,11 +24,12 @@ import {
 	isAuthorized,
 } from "@cedar-policy/cedar-wasm/nodejs";
 import {
+	configurationError,
 	ROLE_CONTEXT_KEY,
 	TEAM_CONTEXT_KEY,
 	type ToolCall,
+	validationError,
 } from "@euroclaw/contracts";
-import { configurationError, validationError } from "@euroclaw/errors";
 import {
 	createPolicyPlugin,
 	type EntityRef,

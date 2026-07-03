@@ -9,7 +9,7 @@ import {
 	configurationError,
 	EuroclawError,
 	errorMessage,
-} from "@euroclaw/errors";
+} from "@euroclaw/contracts";
 import { type } from "arktype";
 import type { Claw, ClawApi, ClawApiHttpMethod, ClawApiMethod } from "euroclaw";
 import { clawApiRouteList, parseClawApiInput } from "euroclaw";

@@ -7,7 +7,7 @@
  * the mongodb driver's public API. MIT, © 2024-present Bereket Engida. See THIRD_PARTY_NOTICES.md.
  */
 
-import type { Adapter, Where } from "@euroclaw/storage-core";
+import type { Adapter, Where } from "@euroclaw/contracts";
 import type { Db, Document, Filter } from "mongodb";
 
 const MONGO_OP = {

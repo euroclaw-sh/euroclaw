@@ -3,8 +3,8 @@ import {
 	jsonObject,
 	jsonValue,
 	RESERVED_CONTEXT_PREFIX,
+	validationError,
 } from "@euroclaw/contracts";
-import { validationError } from "@euroclaw/errors";
 import { type as ark } from "arktype";
 
 export const RUNTIME_RECORDING_CONTEXT_KEY = `${RESERVED_CONTEXT_PREFIX}recording`;
