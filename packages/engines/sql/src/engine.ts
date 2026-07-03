@@ -9,7 +9,7 @@ import type {
 } from "@euroclaw/engine-core";
 import { drainWork as drainEngineWork } from "@euroclaw/engine-core";
 import type { Runtime } from "@euroclaw/runtime";
-import type { SqlEngineStore } from "./store";
+import { addMs, type SqlEngineStore } from "./store";
 import type {
 	SqlEngineWorkerConfig,
 	WorkerTickOptions,
@@ -29,11 +29,10 @@ export type SqlEngineConfig = {
 	 * Invocation soft deadline for cron-driven work, in ms (e.g. 240_000 of Vercel's 300s budget).
 	 * Computed ONCE per cron invocation: the drain stops claiming past it, and an in-flight run
 	 * parks a yield checkpoint + continuation task instead of being killed by the platform.
-	 * Unset = never yield (daemon/no-timeout hosts).
+	 * Unset = never yield (daemon/no-timeout hosts). Deadlines read the store's clock
+	 * (`createSqlEngineStore(adapter, { now })`) — one time source for leases and budgets.
 	 */
 	softDeadlineMs?: number;
-	/** Time source — for deterministic deadlines in tests. */
-	now?: () => string;
 	cron?: false | { limit?: number };
 };
 
@@ -54,7 +53,6 @@ function createSqlEngineHandle(input: {
 }): SqlEngineHandle {
 	const worker = createSqlEngineWorker({
 		leaseTtlMs: input.config.leaseTtlMs,
-		...(input.config.now !== undefined ? { now: input.config.now } : {}),
 		runtime: input.runtime,
 		store: input.config.store,
 		workerId: input.config.workerId ?? "euroclaw-worker",
@@ -106,15 +104,11 @@ function createSqlEngineHandle(input: {
 	};
 }
 
-function addMs(iso: string, ms: number): string {
-	return new Date(Date.parse(iso) + ms).toISOString();
-}
-
 function sqlCronPlugin<const Config extends SqlEngineConfig>(
 	config: Config,
 	engine: SqlEngineHandle,
 ): EuroclawPlugin<SqlEngineCronFlag<Config>> {
-	const now = config.now ?? (() => new Date().toISOString());
+	const now = config.store.now;
 	return {
 		id: "engine-sql",
 		cron:

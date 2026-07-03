@@ -60,7 +60,6 @@ describe("createClaw deadline slicing", () => {
 				// leaseTtl outlives the simulated clock jumps — heartbeats renew in real time, but the
 				// injected test clock leaps 100s per tool call.
 				leaseTtlMs: 600_000,
-				now,
 				softDeadlineMs: 50_000,
 				store,
 				workerId: "worker-1",
@@ -155,7 +154,6 @@ describe("createClaw deadline slicing", () => {
 			cronHandler: { secret: "s3cret" },
 			database: db,
 			engine: sqlEngine({
-				now,
 				softDeadlineMs: 50_000,
 				store,
 				workerId: "worker-1",

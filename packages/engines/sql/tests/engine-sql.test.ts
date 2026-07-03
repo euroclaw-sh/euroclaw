@@ -620,8 +620,9 @@ describe("@euroclaw/engine-sql", () => {
 	});
 
 	it("tick claims nothing past the invocation deadline", async () => {
+		// The deadline check reads the store's clock — the engine's single time source.
 		const store = createSqlEngineStore(memoryAdapter(), {
-			now: () => "2026-01-01T00:00:00.000Z",
+			now: () => "2026-01-01T00:05:00.000Z",
 		});
 		const runtime: Runtime = {
 			run: async () => ({ status: "completed", text: "done", steps: 1 }),
@@ -632,7 +633,6 @@ describe("@euroclaw/engine-sql", () => {
 			store,
 			runtime,
 			workerId: "worker-1",
-			now: () => "2026-01-01T00:05:00.000Z",
 		});
 		const run = await store.createRun({ input: { prompt: "hello" } });
 		const task = await store.enqueueTask({

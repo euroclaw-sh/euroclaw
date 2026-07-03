@@ -26,7 +26,8 @@ export const runCheckpointFields = {
 		immutable: true,
 	}),
 	createdAt: field.string({ required: true, immutable: true }),
-	consumedAt: field.string(),
+	// Stamped by the store's consume transition, never caller-provided.
+	consumedAt: field.string({ input: false }),
 } as const;
 
 export const runCheckpointEntity = entity(

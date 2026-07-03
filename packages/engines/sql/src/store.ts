@@ -166,6 +166,8 @@ export type SaveIdempotencyInput = IdempotencyLookup & {
 };
 
 export type SqlEngineStore = {
+	/** The store's time source — the engine's single clock (worker deadline checks, cron budgets). */
+	now: () => string;
 	transaction: <R>(fn: (tx: SqlEngineStore) => Promise<R>) => Promise<R>;
 	createRun: (input?: CreateRunInput) => Promise<RunRecord>;
 	getRun: (id: string) => Promise<RunRecord | null>;
@@ -220,7 +222,7 @@ function hashText(text: string): string {
 	return bytesToHex(sha256(utf8ToBytes(text)));
 }
 
-function addMs(iso: string, ms: number): string {
+export function addMs(iso: string, ms: number): string {
 	return new Date(Date.parse(iso) + ms).toISOString();
 }
 
@@ -363,6 +365,8 @@ export function createSqlEngineStore(
 	}
 
 	const store: SqlEngineStore = {
+		now,
+
 		transaction(fn) {
 			return runTransaction((tx) => fn(createSqlEngineStore(tx, options)));
 		},

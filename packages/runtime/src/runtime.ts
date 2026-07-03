@@ -470,6 +470,9 @@ export function createRuntime<const Config extends RuntimeConfig>(
 							: {}),
 						...(state.runId !== undefined ? { runId: state.runId } : {}),
 					};
+					// Validate at the write boundary — a malformed envelope must not become a poison
+					// checkpoint that fails only when the continuation task tries to load it.
+					parseRuntimeYieldMetadata(metadata);
 					const record = await runCheckpointStore.create({
 						createdAt: now(),
 						metadata,
@@ -525,6 +528,9 @@ export function createRuntime<const Config extends RuntimeConfig>(
 					),
 				};
 				if (state.recording !== undefined) metadata.recording = state.recording;
+				// Validate at the write boundary — a malformed checkpoint must not park an
+				// unresumable approval and surface only when a human grants it.
+				parseRuntimeApprovalMetadata(metadata);
 				return metadata as JsonObject;
 			},
 			resolveContext: resolveGovernanceContext,

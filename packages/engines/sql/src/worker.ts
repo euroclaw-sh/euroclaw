@@ -54,7 +54,6 @@ export type SqlEngineWorkerConfig = {
 	runtime: Runtime;
 	workerId: string;
 	leaseTtlMs?: number;
-	now?: () => string;
 };
 
 export type WorkerTickOptions = {
@@ -108,16 +107,6 @@ function runtimeResumeRunPayload(
 	return valid;
 }
 
-/** The claimed task's ctx, carried forward onto the continuation it enqueues. */
-function taskPayloadCtx(
-	payload: Record<string, unknown>,
-): Record<string, unknown> | undefined {
-	const ctx = payload.ctx;
-	return typeof ctx === "object" && ctx !== null && !Array.isArray(ctx)
-		? (ctx as Record<string, unknown>)
-		: undefined;
-}
-
 function runtimeResult(result: unknown, label: string): RuntimeResult {
 	const valid = RuntimeResultSchema(result);
 	if (valid instanceof type.errors) {
@@ -134,12 +123,18 @@ function workerRuntimeResult(result: unknown): WorkerRuntimeResult {
 	return valid;
 }
 
+type TaskExecution = {
+	result: WorkerRuntimeResult;
+	/** The task's parsed ctx — carried forward onto any continuation this slice enqueues. */
+	ctx: Record<string, unknown> | undefined;
+};
+
 async function runTask(
 	runtime: Runtime,
 	claim: ClaimedTask,
 	abortSignal?: RuntimeAbortSignal,
 	deadlineAt?: string,
-): Promise<WorkerRuntimeResult> {
+): Promise<TaskExecution> {
 	// runId scopes effect ids and runtime events to the durable run, across attempts and slices;
 	// deadlineAt lets the runtime park a yield checkpoint before the invocation's budget runs out.
 	const options = {
@@ -149,10 +144,13 @@ async function runTask(
 	};
 	if (claim.task.kind === RUNTIME_RUN_TASK) {
 		const payload = runtimeRunPayload(claim.task.payload);
-		return runtimeResult(
-			await runtime.run(payload.prompt, payload.ctx, options),
-			"runtime.run result",
-		);
+		return {
+			result: runtimeResult(
+				await runtime.run(payload.prompt, payload.ctx, options),
+				"runtime.run result",
+			),
+			ctx: payload.ctx,
+		};
 	}
 
 	if (claim.task.kind === RUNTIME_RESUME_RUN_TASK) {
@@ -163,7 +161,7 @@ async function runTask(
 			options,
 		);
 		if (!rawResumeResult) throw stateError("run checkpoint is not consumable");
-		return workerRuntimeResult(rawResumeResult);
+		return { result: workerRuntimeResult(rawResumeResult), ctx: payload.ctx };
 	}
 
 	const payload = runtimeContinueRunPayload(claim.task.payload);
@@ -173,7 +171,7 @@ async function runTask(
 		options,
 	);
 	if (!rawApprovalResult) throw stateError("approval is not consumable");
-	return workerRuntimeResult(rawApprovalResult);
+	return { result: workerRuntimeResult(rawApprovalResult), ctx: payload.ctx };
 }
 
 async function failClaim(
@@ -290,7 +288,7 @@ export function createSqlEngineWorker(config: SqlEngineWorkerConfig): {
 	tick: (options?: WorkerTickOptions) => Promise<WorkerTickResult>;
 } {
 	const { store, runtime, workerId, leaseTtlMs } = config;
-	const now = config.now ?? (() => new Date().toISOString());
+	const now = store.now;
 	return {
 		async tick(options?: WorkerTickOptions) {
 			const deadlineAt = options?.deadlineAt;
@@ -333,7 +331,7 @@ export function createSqlEngineWorker(config: SqlEngineWorkerConfig): {
 					deadlineAt,
 				);
 				void runtimeTask.catch(() => undefined);
-				const result = await Promise.race([
+				const execution = await Promise.race([
 					runtimeTask,
 					heartbeat.lost.then((reason) => {
 						throw stateError("task lease lost during runtime execution", {
@@ -342,6 +340,7 @@ export function createSqlEngineWorker(config: SqlEngineWorkerConfig): {
 						});
 					}),
 				]);
+				const result = execution.result;
 				if (heartbeat.isLost()) {
 					return {
 						status: "failed",
@@ -357,7 +356,7 @@ export function createSqlEngineWorker(config: SqlEngineWorkerConfig): {
 					// Self-continuation: park is already durable (the runtime persisted the checkpoint);
 					// one transaction completes this slice and enqueues the next. The run returns to
 					// "queued" — honest: a due task exists. Original ctx rides along on the continuation.
-					const ctx = taskPayloadCtx(claim.task.payload);
+					const ctx = execution.ctx;
 					const checkpointId = result.checkpointId;
 					return store.transaction(async (tx) => {
 						const task = await tx.completeTask({
