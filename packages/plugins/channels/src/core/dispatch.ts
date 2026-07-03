@@ -1,15 +1,17 @@
+// The shared dispatch engine — protocol only. The calling plugin resolves the endpoint (code
+// declaration for channels, connection row for channelConnections), assembles the normalized
+// EndpointContext, and supplies a persist sink for state events; the engine owns the
+// verify → parse → bind → relay → reply round-trip and never touches storage.
+
 import { errorMessage } from "@euroclaw/errors";
 import type { Claw } from "euroclaw";
 import type {
 	Channel,
-	ChannelEndpointMode,
-	ChannelEndpointStore,
 	EndpointContext,
 	InboundMessage,
 	InboundRequest,
-	UpdateChannelEndpointInput,
+	PersistEndpointEvent,
 } from "./contracts";
-import { resolveEndpoint } from "./resolve";
 
 export type ChannelDispatchResult = {
 	status: number;
@@ -17,34 +19,12 @@ export type ChannelDispatchResult = {
 };
 
 /**
- * Persist post-dispatch endpoint state. An existing row gets a plain patch — never `mode`, so inbound
- * traffic can't flip a registered endpoint's transport (a webhook POST to a poll-registered endpoint
- * would otherwise silently drop it from the poll fan-out). Only first contact creates the row, with
- * the mode of the transport that just ran.
- */
-function persistEndpointState(input: {
-	store: ChannelEndpointStore;
-	endpoint: EndpointContext;
-	mode: ChannelEndpointMode;
-	patch: UpdateChannelEndpointInput;
-}): Promise<unknown> {
-	const { store, endpoint, patch } = input;
-	const key = {
-		provider: endpoint.provider,
-		tenantId: endpoint.tenantId,
-		endpointKey: endpoint.endpointKey,
-	};
-	return endpoint.record
-		? store.updateByKey({ ...key, patch })
-		: store.upsert({ ...key, mode: input.mode, ...patch });
-}
-
-/**
  * The shared half every provider reuses: bind the external conversation to a claw/thread (core), relay
  * the message to the claw, and — if the run produced text — reply through the channel. A channel only
- * supplies parse/send; this owns the round-trip.
+ * supplies parse/send; this owns the round-trip. The binding is keyed by the endpoint (the bot scopes
+ * external conversation ids); whose data the conversation is rides the claw bind defaults.
  */
-async function handleInbound(input: {
+export async function handleInbound(input: {
 	claw: Claw;
 	channel: Channel;
 	endpoint: EndpointContext;
@@ -53,13 +33,13 @@ async function handleInbound(input: {
 	const { claw, channel, endpoint, message } = input;
 	const binding = await claw.api.bindConversation({
 		provider: endpoint.provider,
-		tenantId: endpoint.tenantId,
+		endpointKey: endpoint.endpointKey,
 		externalConversationId: message.externalConversationId,
 		externalActorId: message.externalActorId,
-		claw: channel.bind?.claw,
+		claw: endpoint.claw,
 		thread: {
-			...channel.bind?.thread,
-			title: channel.bind?.thread?.title ?? message.conversationTitle,
+			...endpoint.thread,
+			title: endpoint.thread?.title ?? message.conversationTitle,
 		},
 	});
 	const sent = await claw.api.sendMessage({
@@ -80,24 +60,17 @@ async function handleInbound(input: {
 }
 
 /**
- * Handle one inbound webhook: resolve the endpoint, authenticate before trusting the body, parse, relay
- * each message, and mark the endpoint received. The channel's `identify` may override the route key
- * (fan-in providers that share one URL).
+ * Handle one inbound webhook on an already-resolved endpoint: authenticate before trusting the body,
+ * parse, relay each message, and report `received` to the persist sink.
  */
 export async function dispatchWebhook(input: {
 	claw: Claw;
 	channel: Channel;
-	store: ChannelEndpointStore;
-	endpointKey: string;
+	endpoint: EndpointContext;
 	request: InboundRequest;
-	now: () => string;
+	persist: PersistEndpointEvent;
 }): Promise<ChannelDispatchResult> {
-	const { claw, channel, store, request } = input;
-	const endpointKey = channel.identify?.(request) ?? input.endpointKey;
-	const endpoint = await resolveEndpoint({ channel, endpointKey, store });
-	if (!endpoint) {
-		return { status: 404, body: { ok: false, error: "unknown endpoint" } };
-	}
+	const { claw, channel, endpoint, request } = input;
 	if (channel.verify) {
 		const ok = await channel.verify({ request, endpoint });
 		if (!ok) return { status: 401, body: { ok: false, error: "unauthorized" } };
@@ -106,16 +79,7 @@ export async function dispatchWebhook(input: {
 	for (const message of messages) {
 		await handleInbound({ claw, channel, endpoint, message });
 	}
-	await persistEndpointState({
-		store,
-		endpoint,
-		mode: "webhook",
-		patch: {
-			status: "validated",
-			lastError: null,
-			lastReceivedAt: input.now(),
-		},
-	});
+	await input.persist({ kind: "received" });
 	return {
 		status: 200,
 		body: { ok: true, data: { processed: messages.length } },
@@ -123,24 +87,23 @@ export async function dispatchWebhook(input: {
 }
 
 /**
- * Poll one endpoint: read its cursor, ask the channel for new messages, relay them, and advance the
- * cursor. On failure the endpoint is marked `error` with the message, and the error is rethrown so the
- * cron surfaces it.
+ * Poll one already-resolved endpoint: ask the channel for new messages from the context's cursor,
+ * relay them, and report the advanced cursor to the persist sink. On failure the sink gets a
+ * `poll-error` event and the error is rethrown so the cron surfaces it.
  */
 export async function pollEndpoint(input: {
 	claw: Claw;
 	channel: Channel;
-	store: ChannelEndpointStore;
 	endpoint: EndpointContext;
-	now: () => string;
+	persist: PersistEndpointEvent;
 	limit?: number;
 }): Promise<{ processed: number }> {
-	const { claw, channel, store, endpoint } = input;
+	const { claw, channel, endpoint } = input;
 	if (!channel.poll) return { processed: 0 };
 	try {
 		const result = await channel.poll({
 			endpoint,
-			cursor: endpoint.record?.cursor,
+			cursor: endpoint.cursor,
 			limit: input.limit,
 		});
 		let processed = 0;
@@ -148,75 +111,13 @@ export async function pollEndpoint(input: {
 			await handleInbound({ claw, channel, endpoint, message });
 			processed += 1;
 		}
-		await persistEndpointState({
-			store,
-			endpoint,
-			mode: "poll",
-			patch: {
-				status: "validated",
-				cursor: result.cursor,
-				lastError: null,
-				lastPolledAt: input.now(),
-			},
-		});
+		await input.persist({ kind: "polled", cursor: result.cursor });
 		return { processed };
 	} catch (error) {
-		await persistEndpointState({
-			store,
-			endpoint,
-			mode: "poll",
-			patch: {
-				status: "error",
-				lastError: { message: errorMessage(error) },
-				lastPolledAt: input.now(),
-			},
+		await input.persist({
+			kind: "poll-error",
+			error: { message: errorMessage(error) },
 		});
 		throw error;
 	}
-}
-
-/**
- * Run the poll cron for one channel over every poll endpoint — code-declared (credentials in-memory)
- * and database-registered (credential stored in the row), deduped by key. A poller whose endpoint has
- * no credentials surfaces its error on that endpoint while the others continue.
- */
-export async function pollChannel(input: {
-	claw: Claw;
-	channel: Channel;
-	store: ChannelEndpointStore;
-	now: () => string;
-	limit?: number;
-}): Promise<{ processed: number }> {
-	const { claw, channel, store } = input;
-	if (!channel.poll) return { processed: 0 };
-	const codeKeys = channel.codeEndpoints
-		.filter((entry) => entry.mode === "poll")
-		.map((entry) => entry.key);
-	const dbKeys = (
-		await store.list({
-			provider: channel.provider,
-			tenantId: channel.tenantId,
-			mode: "poll",
-		})
-	).map((record) => record.endpointKey);
-	const keys = [...new Set([...codeKeys, ...dbKeys])];
-	let processed = 0;
-	for (const key of keys) {
-		const endpoint = await resolveEndpoint({
-			channel,
-			endpointKey: key,
-			store,
-		});
-		if (!endpoint) continue;
-		const result = await pollEndpoint({
-			claw,
-			channel,
-			store,
-			endpoint,
-			now: input.now,
-			limit: input.limit,
-		});
-		processed += result.processed;
-	}
-	return { processed };
 }

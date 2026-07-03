@@ -527,7 +527,7 @@ export function createClawsStore(
 				const record = assertConversationBindingRecord({
 					id: valid.id ?? newId(),
 					provider: valid.provider,
-					tenantId: valid.tenantId,
+					endpointKey: valid.endpointKey,
 					externalConversationId: valid.externalConversationId,
 					externalActorId: valid.externalActorId,
 					clawId: valid.clawId,
@@ -552,7 +552,11 @@ export function createClawsStore(
 					model: "conversation_binding",
 					where: [
 						{ field: "provider", value: input.provider },
-						{ field: "tenantId", value: input.tenantId, connector: "AND" },
+						{
+							field: "endpointKey",
+							value: input.endpointKey,
+							connector: "AND",
+						},
 						{
 							field: "externalConversationId",
 							value: input.externalConversationId,

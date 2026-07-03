@@ -1,71 +1,16 @@
-import type {
-	EntityRecord,
-	EntitySchemaInput,
-	EntityUpdateInput,
-	JsonValue,
-} from "@euroclaw/contracts";
+// The channels floor — the @better-auth/core/oauth2 analog: the Channel adapter contract, the
+// normalized endpoint view, and the message shapes. Both plugins (channels = the app's own bots,
+// channelConnections = user-registered bots) and every provider build on this module; nothing here
+// imports a plugin or a store.
+
+import type { JsonValue } from "@euroclaw/contracts";
 import type {
 	BindConversationClawInput,
 	BindConversationThreadInput,
 } from "euroclaw";
-import type {
-	channelEndpointFields,
-	channelEndpointLookupInputOptions,
-	channelEndpointModeValues,
-	channelEndpointStatusValues,
-	createChannelEndpointInputOptions,
-} from "./schema";
 
+export const channelEndpointModeValues = ["webhook", "poll"] as const;
 export type ChannelEndpointMode = (typeof channelEndpointModeValues)[number];
-export type ChannelEndpointStatus =
-	(typeof channelEndpointStatusValues)[number];
-
-export type ChannelEndpointRecord = EntityRecord<typeof channelEndpointFields>;
-
-export type CreateChannelEndpointInput = EntitySchemaInput<
-	typeof channelEndpointFields,
-	typeof createChannelEndpointInputOptions
->;
-export type ChannelEndpointLookup = EntitySchemaInput<
-	typeof channelEndpointFields,
-	typeof channelEndpointLookupInputOptions
->;
-export type UpdateChannelEndpointInput = EntityUpdateInput<
-	typeof channelEndpointFields
->;
-export type UpdateChannelEndpointByKeyInput = ChannelEndpointLookup & {
-	patch: UpdateChannelEndpointInput;
-};
-
-/** Filter for the poll loop's fan-out over endpoints (e.g. every poll-mode endpoint of a provider). */
-export type ChannelEndpointListFilter = {
-	provider?: string;
-	tenantId?: string;
-	mode?: ChannelEndpointMode;
-	status?: ChannelEndpointStatus;
-};
-
-/**
- * The endpoint store — the sso `ssoProvider` analog: transport state persisted per (provider, tenant,
- * endpointKey). `list` is the addition over the core store this was extracted from; the poll cron
- * fans out over it.
- */
-export type ChannelEndpointStore = {
-	create: (input: CreateChannelEndpointInput) => Promise<ChannelEndpointRecord>;
-	upsert: (input: CreateChannelEndpointInput) => Promise<ChannelEndpointRecord>;
-	get: (id: string) => Promise<ChannelEndpointRecord | null>;
-	getByKey: (
-		input: ChannelEndpointLookup,
-	) => Promise<ChannelEndpointRecord | null>;
-	updateByKey: (
-		input: UpdateChannelEndpointByKeyInput,
-	) => Promise<ChannelEndpointRecord | null>;
-	list: (
-		filter?: ChannelEndpointListFilter,
-	) => Promise<ChannelEndpointRecord[]>;
-};
-
-// ── The Channel adapter contract (the OAuthProvider analog) ───────────────────────────────────────
 
 /**
  * A raw inbound request, narrowed to what a channel needs. The dispatch engine reads the body once and
@@ -95,16 +40,40 @@ export type OutboundMessage = {
 	replyContext?: JsonValue;
 };
 
-/** The endpoint a channel operates on for one request/poll cycle — key, mode, and DB state (if any). */
+/**
+ * The endpoint a channel operates on for one request/poll cycle — a NORMALIZED view the calling
+ * plugin assembles. A code-declared bot (the app's own — credentials in memory on the channel) and a
+ * registered connection row (a user's bot — credentials in the row) look identical here; only the
+ * assembling plugin knows the source.
+ */
 export type EndpointContext = {
 	provider: string;
-	tenantId: string;
 	endpointKey: string;
 	mode: ChannelEndpointMode;
-	record: ChannelEndpointRecord | null;
+	/** Egress credential from a connection row (e.g. a bot token). Code bots keep clients in memory. */
+	secret?: string;
+	/** Inbound verification secret from a connection row — `verify` checks it before code config. */
+	webhookSecret?: string;
+	/** Poll cursor from the endpoint's persisted state. */
+	cursor?: JsonValue;
+	/** Bind defaults for conversations on this endpoint — the tenant rides `claw.tenantId`. */
+	claw?: BindConversationClawInput;
+	thread?: BindConversationThreadInput;
 };
 
-/** An endpoint a channel declares in code — credentials live in-memory on the channel, not the DB. */
+/**
+ * What dispatch reports back after handling traffic on an endpoint. Each plugin maps events onto its
+ * own table (channels → channel_endpoint state, channelConnections → the connection row) — the engine
+ * never touches storage.
+ */
+export type EndpointEvent =
+	| { kind: "received" }
+	| { kind: "polled"; cursor: JsonValue | undefined }
+	| { kind: "poll-error"; error: JsonValue };
+
+export type PersistEndpointEvent = (event: EndpointEvent) => Promise<unknown>;
+
+/** An endpoint a channel declares in code — the app's own bot: a (key, mode) pair. */
 export type CodeEndpoint = {
 	key: string;
 	mode: ChannelEndpointMode;
@@ -112,27 +81,26 @@ export type CodeEndpoint = {
 
 /**
  * The behavioral contract every channel implements — the OAuthProvider analog, but bidirectional
- * (channels send). The shared engine owns bind/relay/reply/persist; a channel supplies only the
- * provider-specific verify/parse/send/poll. Credential resolution (code client vs stored secret) is the
- * channel's private concern.
+ * (channels send). The shared engine owns bind/relay/reply; a channel supplies only the
+ * provider-specific verify/parse/send/poll. Credential resolution (code client vs `endpoint.secret`)
+ * is the channel's private concern.
  */
 export interface Channel {
 	readonly provider: string;
-	readonly tenantId: string;
 	readonly supports: { readonly webhook: boolean; readonly poll: boolean };
-	/** Endpoints declared in code — each a (key, mode); their clients live on the channel. */
+	/** Endpoints declared in code — the app's own bots; their clients live on the channel. */
 	readonly codeEndpoints: readonly CodeEndpoint[];
-	/** Bind defaults merged into every conversation this channel opens. */
+	/** Bind defaults merged into every conversation this channel opens (tenant on `claw.tenantId`). */
 	readonly bind?: {
 		readonly claw?: BindConversationClawInput;
 		readonly thread?: BindConversationThreadInput;
 	};
-	/** Extract the endpoint key from a request (default: the route `:endpointKey`). Fan-in overrides. */
+	/** Extract the endpoint key from a request (default: the route key). Fan-in overrides. */
 	identify?: (request: InboundRequest) => string | undefined;
 	/**
 	 * Authenticate an inbound request against the endpoint BEFORE its body is trusted. Prefer failing
 	 * closed — an unverified webhook relays attacker input straight into a model run (telegram checks
-	 * the row's webhookSecret, then code config, and refuses when neither is set).
+	 * `endpoint.webhookSecret`, then code config, and refuses when neither is set).
 	 */
 	verify?: (input: {
 		request: InboundRequest;

@@ -178,9 +178,13 @@ export const checkpointFields = {
 } as const;
 
 export const conversationBindingFields = {
+	// The account-table analog (better-auth keys accounts by providerId + accountId, with no tenant in
+	// the key): the BOT scopes external conversation ids — telegram DM chat ids repeat across bots — so
+	// the natural key is (provider, endpointKey, externalConversationId). Whose data a conversation is
+	// lives on the claw the binding points at (claw.tenantId), not here.
 	id: field.string({ required: true, unique: true }),
 	provider: field.string({ required: true, index: true }),
-	tenantId: field.string({ required: true, index: true }),
+	endpointKey: field.string({ required: true, index: true }),
 	// External identifiers are pseudonymous personal data (a chat/user id addresses a person), and
 	// metadata carries whatever the ingress adapter stuffs in — so retention/erasure must be able to
 	// sweep them. `possible` marks them without transforming the stored value.

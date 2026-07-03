@@ -5,7 +5,9 @@ import { createPiiMappingStore } from "@euroclaw/storage-durable";
 import type { wrapLanguageModel } from "ai";
 import { createClaw, getEuroclawTables } from "euroclaw";
 import { describe, expect, it } from "vitest";
-import { channels, telegram } from "../src/index";
+import { channelConnections } from "../src/connections/index";
+import { channels } from "../src/index";
+import { telegram } from "../src/telegram/index";
 
 type V2Model = Parameters<typeof wrapLanguageModel>[0]["model"];
 
@@ -27,10 +29,6 @@ function textModel(text: string): V2Model {
 	};
 }
 
-function telegramChannels() {
-	return channels([telegram({ tenantId: "tenant-1", client: fakeClient() })]);
-}
-
 function fakeClient() {
 	return {
 		getUpdates: async () => [],
@@ -38,24 +36,40 @@ function fakeClient() {
 	};
 }
 
+function appBot() {
+	return telegram({
+		client: fakeClient(),
+		webhook: { secret: "hook" },
+		claw: { tenantId: "acme" },
+	});
+}
+
 describe("channels ↔ euroclaw integration", () => {
-	it("collects the plugin's channel_endpoint table via getEuroclawTables", () => {
-		const withPlugin = getEuroclawTables({ plugins: [telegramChannels()] });
-		expect(withPlugin.channel_endpoint).toBeDefined();
-		expect(withPlugin.channel_endpoint?.fields.cursor).toBeDefined();
-		// conversation_binding stayed core (the `account` analog); claw is core too
-		expect(withPlugin.conversation_binding).toBeDefined();
-		expect(withPlugin.claw).toBeDefined();
+	it("collects each plugin's own table via getEuroclawTables", () => {
+		const withPlugins = getEuroclawTables({
+			plugins: [channels([appBot()]), channelConnections([telegram()])],
+		});
+		// channels owns operational state only — no credentials, no tenancy
+		expect(withPlugins.channel_endpoint?.fields.cursor).toBeDefined();
+		expect(withPlugins.channel_endpoint?.fields.secret).toBeUndefined();
+		expect(withPlugins.channel_endpoint?.fields.tenantId).toBeUndefined();
+		// channelConnections owns the registration row — the ssoProvider analog
+		expect(withPlugins.channel_connection?.fields.secret).toBeDefined();
+		expect(withPlugins.channel_connection?.fields.webhookSecret).toBeDefined();
+		expect(withPlugins.channel_connection?.fields.tenantId).toBeDefined();
+		// conversation_binding stayed core (the `account` analog), keyed by endpoint
+		expect(withPlugins.conversation_binding?.fields.endpointKey).toBeDefined();
+		expect(withPlugins.conversation_binding?.fields.tenantId).toBeUndefined();
 	});
 
-	it("does not put channel_endpoint in core — only the plugin brings it", () => {
+	it("does not put channel tables in core — only the plugins bring them", () => {
 		const core = getEuroclawTables({});
 		expect(core.channel_endpoint).toBeUndefined();
-		// the identity-mapping table remains core even with no channels plugin
+		expect(core.channel_connection).toBeUndefined();
 		expect(core.conversation_binding).toBeDefined();
 	});
 
-	it("wires into createClaw without a core-column collision and exposes the endpoints api", async () => {
+	it("wires both plugins into createClaw and exposes the connections api", async () => {
 		const db = memoryAdapter();
 		const claw = createClaw({
 			database: db,
@@ -64,24 +78,25 @@ describe("channels ↔ euroclaw integration", () => {
 				detector: noopDetector,
 				mappings: createPiiMappingStore(db),
 			}),
-			plugins: [telegramChannels()],
+			plugins: [channels([appBot()]), channelConnections([telegram()])],
 		});
-		// the plugin api namespace is present (no getEuroclawTables collision at construction)
-		expect(claw.api.channels.endpoints).toBeDefined();
+		// the connections namespace is present (no getEuroclawTables collision at construction)
+		expect(claw.api.channels.connections).toBeDefined();
 
-		// register an endpoint at runtime through the public api, read it back
-		const created = await claw.api.channels.endpoints.upsert({
+		// register a user's bot at runtime through the public api, read it back
+		const created = await claw.api.channels.connections.register({
 			provider: "telegram",
-			tenantId: "tenant-1",
-			endpointKey: "default",
+			endpointKey: "acme-bot",
 			mode: "webhook",
+			secret: "bot-token",
+			webhookSecret: "hook",
+			tenantId: "org-acme",
 		});
-		expect(created).toMatchObject({ provider: "telegram", mode: "webhook" });
+		expect(created).toMatchObject({ status: "active", tenantId: "org-acme" });
 		expect(
-			await claw.api.channels.endpoints.getByKey({
+			await claw.api.channels.connections.getByKey({
 				provider: "telegram",
-				tenantId: "tenant-1",
-				endpointKey: "default",
+				endpointKey: "acme-bot",
 			}),
 		).toMatchObject({ id: created.id });
 	});
@@ -89,13 +104,11 @@ describe("channels ↔ euroclaw integration", () => {
 	it("rejects two channels for the same provider — webhook dispatch is by provider", () => {
 		expect(() =>
 			channels([
-				telegram({ tenantId: "tenant-a", client: fakeClient() }),
-				// distinct endpointKey so the per-endpoint dedup can't fire first — this exercises the
-				// provider-level guard (the second channel could never receive a webhook)
+				appBot(),
 				telegram({
-					tenantId: "tenant-b",
-					endpointKey: "other",
 					client: fakeClient(),
+					endpointKey: "other",
+					claw: { tenantId: "globex" },
 				}),
 			]),
 		).toThrow(/duplicate channel provider/);

@@ -13,16 +13,17 @@ describe("createClaw conversation binding", () => {
 
 		const first = await claw.api.bindConversation({
 			provider: "telegram",
-			tenantId: "tenant-1",
+			endpointKey: "default",
 			externalConversationId: "chat-1",
 			externalActorId: "user-1",
 			metadata: { source: "webhook" },
-			claw: { name: "Recruiting assistant" },
+			// the tenant is claw-creation data — it rides the claw bind defaults, not the binding key
+			claw: { name: "Recruiting assistant", tenantId: "tenant-1" },
 			thread: { title: "Telegram chat" },
 		});
 		const second = await claw.api.bindConversation({
 			provider: "telegram",
-			tenantId: "tenant-1",
+			endpointKey: "default",
 			externalConversationId: "chat-1",
 		});
 
@@ -31,9 +32,10 @@ describe("createClaw conversation binding", () => {
 		expect(second.binding.id).toBe(first.binding.id);
 		expect(second.claw.id).toBe(first.claw.id);
 		expect(second.thread.id).toBe(first.thread.id);
+		expect(first.claw.tenantId).toBe("tenant-1");
 		expect(first.binding).toMatchObject({
 			provider: "telegram",
-			tenantId: "tenant-1",
+			endpointKey: "default",
 			externalConversationId: "chat-1",
 			externalActorId: "user-1",
 			metadata: { source: "webhook" },

@@ -1,7 +1,6 @@
 import {
 	configurationError,
 	errorMessage,
-	stateError,
 	validationError,
 } from "@euroclaw/errors";
 import { type } from "arktype";
@@ -15,6 +14,7 @@ import type {
 	EndpointContext,
 	InboundMessage,
 } from "../core/contracts";
+import { createTelegramClient, type TelegramClient } from "./client";
 
 // ── Telegram wire format (the untrusted-boundary schemas the adapter parses into normalized messages) ─
 const telegramId = type("string | number");
@@ -45,39 +45,16 @@ const telegramCursor = type({ "offset?": "number | undefined" });
 
 type TelegramUpdate = typeof telegramUpdate.infer;
 
-export type TelegramFetchResponse = {
-	ok: boolean;
-	status?: number;
-	json: () => Promise<unknown>;
-};
-export type TelegramFetch = (
-	input: string,
-	init?: { body?: string; headers?: Record<string, string>; method?: string },
-) => Promise<TelegramFetchResponse>;
-
-export type TelegramClient = {
-	getUpdates: (input: {
-		offset?: number;
-		limit?: number;
-		timeoutSeconds?: number;
-	}) => Promise<unknown>;
-	sendMessage: (input: {
-		chatId: string | number;
-		text: string;
-		replyToMessageId?: number;
-	}) => Promise<unknown>;
-};
-
 export type TelegramConfig = {
-	tenantId: string;
-	/** Bot token; defaults to the TELEGRAM_BOT_TOKEN environment variable. */
+	/** Bot token for the app's own bot; defaults to the TELEGRAM_BOT_TOKEN environment variable. */
 	token?: string;
-	/** Transport for this bot; defaults to webhook (poll is opt-in and contributes the cron task). */
+	/** Transport for the app's own bot; defaults to webhook (poll is opt-in and contributes the cron). */
 	mode?: ChannelEndpointMode;
-	/** Endpoint key; defaults to "default". Distinguishes multiple bots of the same provider. */
+	/** Code endpoint key; defaults to "default". Distinguishes multiple bots of the same provider. */
 	endpointKey?: string;
 	/** Escape hatch — inject a client for tests or a self-hosted Bot API server. */
 	client?: TelegramClient;
+	/** Bind defaults for conversations on the app's own bot — the tenant rides `claw.tenantId`. */
 	claw?: BindConversationClawInput;
 	thread?: BindConversationThreadInput;
 	webhook?: { secret?: string; headerName?: string };
@@ -140,53 +117,57 @@ function replyMessageId(replyContext: unknown): number | undefined {
 type TelegramPoll<Config> = Config extends { mode: "poll" } ? true : false;
 
 /**
- * The Telegram channel. Faithful port of the standalone telegram package onto the `Channel` contract:
- * the shared engine now owns bind/relay/reply, so this supplies only wire parsing, the secret-token
- * check, sending, and long-poll. The default transport is webhook (poll is opt-in). The `$poll` marker
- * lets `channels()` derive the cron requirement at compile time (see the old package's TelegramHasCron).
+ * The Telegram channel. With config it is the app's own bot (channels plugin: code credentials, code
+ * endpoint, bind defaults). Bare `telegram()` is the pure transport for channelConnections — every
+ * endpoint-specific value (token, webhook secret, tenant, defaults) resolves from the connection row
+ * via the EndpointContext. The `$poll` marker lets `channels()` derive its cron requirement at
+ * compile time; the overloads keep it a literal without a cast.
  */
+export function telegram(): Channel & { readonly $poll: false };
 export function telegram<const Config extends TelegramConfig>(
 	config: Config,
-): Channel & { readonly $poll: TelegramPoll<Config> } {
+): Channel & { readonly $poll: TelegramPoll<Config> };
+export function telegram(
+	config: TelegramConfig = {},
+): Channel & { readonly $poll: boolean } {
 	const mode: ChannelEndpointMode = config.mode ?? "webhook";
 	const endpointKey = config.endpointKey ?? "default";
 	// Build the code client only if credentials are provided here. Construction never throws for a
-	// missing token — a database-registered endpoint resolves its client from `endpoint.secret` instead.
+	// missing token — a registered connection resolves its client from `endpoint.secret` instead.
 	const codeClient = config.client ?? tokenClient(config.token ?? envToken());
 
 	// The client for one endpoint: the in-memory code client for the declared key, otherwise one built
-	// from the token stored on the endpoint row (the sso model — read the credential back). No
+	// from the token stored on the connection row (the sso model — read the credential back). No
 	// credentials → a clear error.
 	const clientFor = (endpoint: EndpointContext): TelegramClient => {
 		if (codeClient && endpoint.endpointKey === endpointKey) return codeClient;
-		const token = endpoint.record?.secret;
-		if (token) return createTelegramClient({ token });
+		if (endpoint.secret)
+			return createTelegramClient({ token: endpoint.secret });
 		throw configurationError("telegram endpoint has no credentials", {
 			endpointKey: endpoint.endpointKey,
 			reason:
-				"pass token/client in code, or register the endpoint with a stored secret",
+				"pass token/client in code, or register the connection with a stored secret",
 		});
 	};
 
 	return {
 		provider: "telegram",
-		tenantId: config.tenantId,
 		supports: { webhook: true, poll: true },
 		codeEndpoints: [{ key: endpointKey, mode }],
 		bind: { claw: config.claw, thread: config.thread },
 		// Phantom-ish marker read by channels() at the type level; its runtime value tracks the mode.
-		$poll: (mode === "poll") as TelegramPoll<Config>,
+		$poll: mode === "poll",
 
 		verify({ request, endpoint }) {
-			// Per-endpoint secret (a runtime-registered row's webhookSecret) wins over the channel-level
+			// Per-endpoint secret (a registered connection's webhookSecret) wins over the channel-level
 			// code config. No secret at all fails CLOSED — an open webhook would relay attacker text
 			// straight into a model run — and loudly: a missing secret is a setup gap, not a bad credential.
-			const secret = endpoint.record?.webhookSecret ?? config.webhook?.secret;
+			const secret = endpoint.webhookSecret ?? config.webhook?.secret;
 			if (!secret) {
 				throw configurationError("telegram webhook endpoint has no secret", {
 					endpointKey: endpoint.endpointKey,
 					reason:
-						"set webhook.secret in code or webhookSecret on the endpoint row (Bot API secret_token)",
+						"set webhook.secret in code or webhookSecret on the connection (Bot API secret_token)",
 				});
 			}
 			const headerName =
@@ -244,46 +225,4 @@ export function telegram<const Config extends TelegramConfig>(
 
 function tokenClient(token: string | undefined): TelegramClient | undefined {
 	return token ? createTelegramClient({ token }) : undefined;
-}
-
-export function createTelegramClient(input: {
-	token: string;
-	fetch?: TelegramFetch;
-	apiBaseUrl?: string;
-}): TelegramClient {
-	const globalFetch = (globalThis as { fetch?: TelegramFetch }).fetch;
-	const resolvedFetch = input.fetch ?? globalFetch?.bind(globalThis);
-	if (!resolvedFetch) {
-		throw configurationError("Telegram fetch implementation is unavailable", {
-			reason: "pass fetch or run in an environment with global fetch",
-		});
-	}
-	const fetcher: TelegramFetch = resolvedFetch;
-	const baseUrl = input.apiBaseUrl ?? "https://api.telegram.org";
-	async function call(method: string, body: Record<string, unknown>) {
-		const response = await fetcher(`${baseUrl}/bot${input.token}/${method}`, {
-			body: JSON.stringify(body),
-			headers: { "content-type": "application/json" },
-			method: "POST",
-		});
-		const data = (await response.json()) as { ok?: boolean; result?: unknown };
-		if (!response.ok || data.ok === false) {
-			throw stateError("Telegram API request failed", {
-				method,
-				status: response.status,
-				telegramOk: data.ok,
-			});
-		}
-		return data.result;
-	}
-	return {
-		getUpdates: ({ offset, limit, timeoutSeconds }) =>
-			call("getUpdates", { offset, limit, timeout: timeoutSeconds }),
-		sendMessage: ({ chatId, text, replyToMessageId }) =>
-			call("sendMessage", {
-				chat_id: chatId,
-				text,
-				reply_to_message_id: replyToMessageId,
-			}),
-	};
 }

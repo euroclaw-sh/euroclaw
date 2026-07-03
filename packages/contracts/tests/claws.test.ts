@@ -153,6 +153,6 @@ describe("euroclaw core — durable Claw contracts", () => {
 		expect(fields.metadata.pii).toBe("possible");
 		// the opaque discriminator + internal keys are NOT personal data
 		expect(fields.provider.pii).toBeUndefined();
-		expect(fields.tenantId.pii).toBeUndefined();
+		expect(fields.endpointKey.pii).toBeUndefined();
 	});
 });

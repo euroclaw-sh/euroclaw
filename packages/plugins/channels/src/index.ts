@@ -1,52 +1,42 @@
-// @euroclaw/channels — the self-contained channels plugin. Register channel types (adapters) in code;
-// endpoints resolve from code declarations ∪ database rows (the sso plugin's model). One webhook route
-// dispatches by provider/endpoint, one poll cron fans over poll-capable channels, and `channel_endpoint`
-// is owned here (declared via the plugin `schema` slot), not in core.
-export type {
-	Channel,
-	ChannelEndpointListFilter,
-	ChannelEndpointLookup,
-	ChannelEndpointMode,
-	ChannelEndpointRecord,
-	ChannelEndpointStatus,
-	ChannelEndpointStore,
-	CodeEndpoint,
-	CreateChannelEndpointInput,
-	EndpointContext,
-	InboundMessage,
-	InboundRequest,
-	OutboundMessage,
-	UpdateChannelEndpointByKeyInput,
-	UpdateChannelEndpointInput,
-} from "./core/contracts";
+// @euroclaw/channels — the app's own bots (the socialProviders/genericOAuth analog): one shared bot
+// per provider, declared in code, serving every user of the app. This root export is the channels()
+// plugin plus the floor every provider and plugin builds on (the @better-auth/core/oauth2 analog).
+//
+// Deliberately NOT re-exported here (subpath isolation beats tree-shaking):
+//   import { channelConnections } from "@euroclaw/channels/connections"  — user-registered bots (SSO analog)
+//   import { telegram } from "@euroclaw/channels/telegram"               — providers
+
 export {
-	dispatchWebhook,
-	pollChannel,
-	pollEndpoint,
-} from "./core/dispatch";
-export {
-	type ChannelEndpointsApi,
-	type ChannelsApi,
 	type ChannelsPlugin,
 	type ChannelsPluginOptions,
 	channels,
-} from "./core/plugin";
-export { resolveEndpoint } from "./core/resolve";
+} from "./channels/plugin";
 export {
-	channelEndpointModeValues,
-	channelEndpointStatusValues,
+	channelEndpointFields,
 	channelsModels,
 	channelsSchema,
-} from "./core/schema";
+} from "./channels/schema";
 export {
-	type ChannelEndpointStoreOptions,
-	createChannelEndpointsStore,
-} from "./core/store";
+	type ChannelEndpointStateRecord,
+	type ChannelEndpointStateStore,
+	createChannelEndpointStateStore,
+} from "./channels/store";
+export type {
+	Channel,
+	ChannelEndpointMode,
+	CodeEndpoint,
+	EndpointContext,
+	EndpointEvent,
+	InboundMessage,
+	InboundRequest,
+	OutboundMessage,
+	PersistEndpointEvent,
+} from "./core/contracts";
+export { channelEndpointModeValues } from "./core/contracts";
 export {
-	createTelegramClient,
-	type TelegramClient,
-	type TelegramConfig,
-	type TelegramFetch,
-	type TelegramFetchResponse,
-	telegram,
-} from "./providers";
+	type ChannelDispatchResult,
+	dispatchWebhook,
+	handleInbound,
+	pollEndpoint,
+} from "./core/dispatch";
+export { endpointId } from "./core/id";

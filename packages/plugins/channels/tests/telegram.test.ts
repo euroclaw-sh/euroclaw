@@ -1,21 +1,16 @@
-import { memoryAdapter } from "@euroclaw/storage-core";
 import type { Claw } from "euroclaw";
 import { describe, expect, it } from "vitest";
 import {
-	type ChannelEndpointRecord,
-	createChannelEndpointsStore,
 	dispatchWebhook,
 	type EndpointContext,
-	type TelegramClient,
-	telegram,
+	type EndpointEvent,
 } from "../src/index";
+import { type TelegramClient, telegram } from "../src/telegram/index";
 
 const endpoint: EndpointContext = {
 	provider: "telegram",
-	tenantId: "tenant-1",
 	endpointKey: "default",
 	mode: "webhook",
-	record: null,
 };
 
 function fakeTelegramClient(): TelegramClient & {
@@ -56,10 +51,7 @@ function update(overrides: Record<string, unknown> = {}) {
 
 describe("telegram channel", () => {
 	it("parses a text update into a normalized inbound message", () => {
-		const channel = telegram({
-			tenantId: "tenant-1",
-			client: fakeTelegramClient(),
-		});
+		const channel = telegram({ client: fakeTelegramClient() });
 		const messages = channel.parseInbound({
 			request: {
 				headers: { get: () => null },
@@ -79,10 +71,7 @@ describe("telegram channel", () => {
 	});
 
 	it("ignores updates without a text message", () => {
-		const channel = telegram({
-			tenantId: "tenant-1",
-			client: fakeTelegramClient(),
-		});
+		const channel = telegram({ client: fakeTelegramClient() });
 		const noText = channel.parseInbound({
 			request: {
 				headers: { get: () => null },
@@ -96,9 +85,18 @@ describe("telegram channel", () => {
 		expect(noText).toEqual([]);
 	});
 
-	it("enforces the secret-token header when a secret is set", () => {
+	it("rejects a non-JSON webhook body as a validation error, not a crash", () => {
+		const channel = telegram({ client: fakeTelegramClient() });
+		expect(() =>
+			channel.parseInbound({
+				request: { headers: { get: () => null }, rawBody: "not-json{" },
+				endpoint,
+			}),
+		).toThrow(/invalid JSON/);
+	});
+
+	it("enforces the secret-token header when a code secret is set", () => {
 		const channel = telegram({
-			tenantId: "tenant-1",
 			client: fakeTelegramClient(),
 			webhook: { secret: "s3cret" },
 		});
@@ -110,37 +108,25 @@ describe("telegram channel", () => {
 		expect(channel.verify?.(headers("wrong"))).toBe(false);
 	});
 
-	it("verifies a runtime-registered endpoint against the row's webhookSecret", () => {
-		// no code webhook secret at all — the row carries the inbound credential
-		const channel = telegram({
-			tenantId: "tenant-1",
-			client: fakeTelegramClient(),
-		});
-		const record: ChannelEndpointRecord = {
-			id: "row-1",
+	it("verifies a registered connection against its webhookSecret", () => {
+		// bare transport — no code webhook secret; the connection row carries the inbound credential
+		const channel = telegram();
+		const connection: EndpointContext = {
 			provider: "telegram",
-			tenantId: "tenant-1",
-			endpointKey: "db-bot",
+			endpointKey: "acme-bot",
 			mode: "webhook",
-			status: "validated",
 			webhookSecret: "row-secret",
-			createdAt: "2026-01-01T00:00:00.000Z",
-			updatedAt: "2026-01-01T00:00:00.000Z",
 		};
-		const dbEndpoint: EndpointContext = { ...endpoint, record };
 		const headers = (value: string | null) => ({
 			request: { headers: { get: () => value }, rawBody: "{}" },
-			endpoint: dbEndpoint,
+			endpoint: connection,
 		});
 		expect(channel.verify?.(headers("row-secret"))).toBe(true);
 		expect(channel.verify?.(headers("wrong"))).toBe(false);
 	});
 
 	it("fails closed when no webhook secret is configured anywhere", () => {
-		const channel = telegram({
-			tenantId: "tenant-1",
-			client: fakeTelegramClient(),
-		});
+		const channel = telegram({ client: fakeTelegramClient() });
 		expect(() =>
 			channel.verify?.({
 				request: { headers: { get: () => null }, rawBody: "{}" },
@@ -149,22 +135,9 @@ describe("telegram channel", () => {
 		).toThrow(/no secret/);
 	});
 
-	it("rejects a non-JSON webhook body as a validation error, not a crash", () => {
-		const channel = telegram({
-			tenantId: "tenant-1",
-			client: fakeTelegramClient(),
-		});
-		expect(() =>
-			channel.parseInbound({
-				request: { headers: { get: () => null }, rawBody: "not-json{" },
-				endpoint,
-			}),
-		).toThrow(/invalid JSON/);
-	});
-
 	it("sends a reply through the client with the reply-to message id", async () => {
 		const client = fakeTelegramClient();
-		const channel = telegram({ tenantId: "tenant-1", client });
+		const channel = telegram({ client });
 		await channel.send({
 			message: {
 				externalConversationId: "123",
@@ -184,24 +157,22 @@ describe("telegram channel", () => {
 			update({ text: "one" }),
 			{ update_id: 12, message: { text: "two", chat: { id: 9 } } },
 		];
-		const channel = telegram({ tenantId: "tenant-1", mode: "poll", client });
-		const result = await channel.poll?.({ endpoint, cursor: { offset: 5 } });
+		const channel = telegram({ mode: "poll", client });
+		const result = await channel.poll?.({
+			endpoint: { ...endpoint, mode: "poll" },
+			cursor: { offset: 5 },
+		});
 		expect(result?.messages.map((m) => m.text)).toEqual(["one", "two"]);
 		expect(result?.cursor).toEqual({ offset: 13 });
 	});
 
 	it("errors clearly on an endpoint with neither a code client nor a stored secret", async () => {
-		const channel = telegram({
-			tenantId: "tenant-1",
-			client: fakeTelegramClient(),
-		});
+		const channel = telegram({ client: fakeTelegramClient() });
 		// a key the code client doesn't cover, and no row credential to fall back on
 		const unknown: EndpointContext = {
 			provider: "telegram",
-			tenantId: "tenant-1",
 			endpointKey: "other-bot",
 			mode: "poll",
-			record: null,
 		};
 		await expect(
 			channel.poll?.({ endpoint: unknown, cursor: undefined }),
@@ -211,14 +182,8 @@ describe("telegram channel", () => {
 	it("relays a telegram webhook end to end and replies through the client", async () => {
 		const client = fakeTelegramClient();
 		// verify fails closed, so even the happy path carries the secret-token handshake
-		const channel = telegram({
-			tenantId: "tenant-1",
-			client,
-			webhook: { secret: "hook-secret" },
-		});
-		const store = createChannelEndpointsStore(memoryAdapter(), {
-			now: () => "2026-01-01T00:00:00.000Z",
-		});
+		const channel = telegram({ client, webhook: { secret: "hook-secret" } });
+		const events: EndpointEvent[] = [];
 		const claw = {
 			api: {
 				bindConversation: async () => ({
@@ -237,8 +202,7 @@ describe("telegram channel", () => {
 		const result = await dispatchWebhook({
 			claw,
 			channel,
-			store,
-			endpointKey: "default",
+			endpoint,
 			request: {
 				headers: {
 					get: (name) =>
@@ -246,12 +210,15 @@ describe("telegram channel", () => {
 				},
 				rawBody: JSON.stringify(update({ text: "ping", message_id: 4 })),
 			},
-			now: () => "2026-01-01T00:00:00.000Z",
+			persist: async (event) => {
+				events.push(event);
+			},
 		});
 
 		expect(result.status).toBe(200);
 		expect(client.sent).toEqual([
 			{ chatId: "123", text: "pong", replyToMessageId: 4 },
 		]);
+		expect(events).toEqual([{ kind: "received" }]);
 	});
 });

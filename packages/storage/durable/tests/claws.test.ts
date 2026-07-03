@@ -262,7 +262,7 @@ describe("createClawsStore", () => {
 		const binding = await claws.conversationBindings.create({
 			id: "binding-1",
 			provider: "telegram",
-			tenantId: "tenant-1",
+			endpointKey: "default",
 			externalConversationId: "chat-1",
 			externalActorId: "user-1",
 			clawId: "claw-1",
@@ -273,13 +273,14 @@ describe("createClawsStore", () => {
 		expect(binding).toMatchObject({
 			id: "binding-1",
 			provider: "telegram",
+			endpointKey: "default",
 			externalConversationId: "chat-1",
 			metadata: { source: "webhook" },
 		});
 		await expect(
 			claws.conversationBindings.getByExternal({
 				provider: "telegram",
-				tenantId: "tenant-1",
+				endpointKey: "default",
 				externalConversationId: "chat-1",
 			}),
 		).resolves.toEqual(binding);

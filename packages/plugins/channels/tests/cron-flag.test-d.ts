@@ -1,9 +1,11 @@
-// Type tests (vitest typecheck mode). Prove that channels() derives its cron requirement from the
-// channels' poll flags at compile time: a webhook-only registry needs no cronHandler, a poll registry
-// makes createClaw's RequireCronHandler demand one. A passing run means each @ts-expect-error errored.
+// Type tests (vitest typecheck mode). Prove that both plugins derive their cron requirement at
+// compile time: channels() from the providers' poll flags, channelConnections() from its poll
+// option. A passing run means each @ts-expect-error errored.
 import { createClaw, type RuntimeConfig } from "euroclaw";
 import { describe, test } from "vitest";
-import { type Channel, channels, telegram } from "../src/index";
+import { channelConnections } from "../src/connections/index";
+import { type Channel, channels } from "../src/index";
+import { telegram } from "../src/telegram/index";
 
 declare const model: RuntimeConfig["model"];
 
@@ -11,7 +13,6 @@ declare const model: RuntimeConfig["model"];
 // Webhook-only with an explicit `$poll: false`, so it never contributes the cron requirement.
 const hooksOnly = {
 	provider: "hooks",
-	tenantId: "t",
 	supports: { webhook: true, poll: false },
 	codeEndpoints: [{ key: "default", mode: "webhook" }],
 	parseInbound: () => [],
@@ -21,10 +22,10 @@ const hooksOnly = {
 
 describe("channels cron-handler requirement", () => {
 	test("a webhook-only channel registry needs no cronHandler", () => {
-		createClaw({ model, plugins: [channels([telegram({ tenantId: "t" })])] });
+		createClaw({ model, plugins: [channels([telegram()])] });
 		createClaw({
 			model,
-			plugins: [channels([telegram({ tenantId: "t", mode: "webhook" })])],
+			plugins: [channels([telegram({ mode: "webhook" })])],
 		});
 	});
 
@@ -32,13 +33,13 @@ describe("channels cron-handler requirement", () => {
 		// @ts-expect-error — a poll channel contributes cron, so cronHandler is required
 		createClaw({
 			model,
-			plugins: [channels([telegram({ tenantId: "t", mode: "poll" })])],
+			plugins: [channels([telegram({ mode: "poll" })])],
 		});
 		// with a cronHandler it type-checks
 		createClaw({
 			cronHandler: { secret: "s" },
 			model,
-			plugins: [channels([telegram({ tenantId: "t", mode: "poll" })])],
+			plugins: [channels([telegram({ mode: "poll" })])],
 		});
 	});
 
@@ -46,11 +47,36 @@ describe("channels cron-handler requirement", () => {
 		// @ts-expect-error — one poll channel in the list is enough to require cronHandler
 		createClaw({
 			model,
-			plugins: [
-				channels([hooksOnly, telegram({ tenantId: "b", mode: "poll" })]),
-			],
+			plugins: [channels([hooksOnly, telegram({ mode: "poll" })])],
 		});
 		// and the webhook-only fixture alone does not
 		createClaw({ model, plugins: [channels([hooksOnly])] });
+	});
+});
+
+describe("channelConnections cron-handler requirement", () => {
+	test("webhook-only connections need no cronHandler", () => {
+		createClaw({ model, plugins: [channelConnections([telegram()])] });
+		createClaw({
+			model,
+			plugins: [
+				channels([telegram()]),
+				channelConnections([telegram()], { poll: false }),
+			],
+		});
+	});
+
+	test("enabling poll requires cronHandler, statically", () => {
+		// @ts-expect-error — poll-mode connections need the cron, so cronHandler is required
+		createClaw({
+			model,
+			plugins: [channelConnections([telegram()], { poll: true })],
+		});
+		// with a cronHandler it type-checks
+		createClaw({
+			cronHandler: { secret: "s" },
+			model,
+			plugins: [channelConnections([telegram()], { poll: true })],
+		});
 	});
 });

@@ -229,11 +229,14 @@ const engineRunMetadataOrUndefined = engineRunMetadataInput.or("undefined");
 // leaks into the tool-call patch).
 const updateClawPatchInput = clawEntity.updateSchema();
 const toolCallStatusPatchInput = toolCallEntity.updateSchema();
+// Claw bind defaults carry tenantId: the tenant is claw-creation data ("conversations from this
+// endpoint create claws in acme"), not part of the binding's identity — bindings are keyed by the
+// endpoint, and whose data a conversation is lives on the claw it points at.
 export const bindConversationClawInput = clawEntity.schema({
-	omit: ["tenantId", "status", "createdAt", "updatedAt"],
+	omit: ["status", "createdAt", "updatedAt"],
 	optional: ["id", "context"],
 });
-export type BindConversationClawInput = Omit<CreateClawInput, "tenantId">;
+export type BindConversationClawInput = CreateClawInput;
 
 export const bindConversationThreadInput = threadEntity.schema({
 	omit: [
@@ -296,11 +299,13 @@ const continueEngineRunInput = ark({
 export const bindConversationInput = ark({
 	"claw?": bindConversationClawInput.or("undefined"),
 	"clawId?": "string | undefined",
+	// Which ingress the conversation arrived on — required and explicit: it is part of the binding's
+	// identity, and a silently defaulted key would invite cross-endpoint collisions.
+	endpointKey: "string",
 	"externalActorId?": "string | undefined",
 	externalConversationId: "string",
 	"metadata?": jsonObjectOrUndefined,
 	provider: "string",
-	tenantId: "string",
 	"thread?": bindConversationThreadInput.or("undefined"),
 	"threadId?": "string | undefined",
 });
@@ -511,7 +516,7 @@ export function createClawApi<Config extends RuntimeConfig>(input: {
 			const clawsStore = store();
 			const existing = await clawsStore.conversationBindings.getByExternal({
 				provider: args.provider,
-				tenantId: args.tenantId,
+				endpointKey: args.endpointKey,
 				externalConversationId: args.externalConversationId,
 			});
 			if (existing) {
@@ -525,23 +530,25 @@ export function createClawApi<Config extends RuntimeConfig>(input: {
 			const existingThread = args.threadId
 				? await requireThreadRecord(clawsStore, args.threadId)
 				: undefined;
+			// A new claw's tenant comes from the claw bind defaults (which carry tenantId); when an
+			// existing claw/thread is bound instead, that claw is the tenancy source of truth.
+			const createClawFromDefaults = () => {
+				if (!args.claw) {
+					throw validationError(
+						"bind conversation input invalid",
+						"creating a claw for a new binding requires claw defaults (with tenantId)",
+					);
+				}
+				return clawsStore.claws.create({
+					...args.claw,
+					ownerActorId: args.claw.ownerActorId ?? args.externalActorId,
+				});
+			};
 			const claw = args.clawId
 				? await requireClawRecord(clawsStore, args.clawId)
 				: existingThread
 					? await requireClawRecord(clawsStore, existingThread.clawId)
-					: await clawsStore.claws.create({
-							...(args.claw ?? {}),
-							ownerActorId: args.claw?.ownerActorId ?? args.externalActorId,
-							tenantId: args.tenantId,
-						});
-
-			if (claw.tenantId !== args.tenantId) {
-				throw validationError(
-					"bind conversation input invalid",
-					"claw tenantId does not match conversation tenantId",
-					{ clawTenantId: claw.tenantId, tenantId: args.tenantId },
-				);
-			}
+					: await createClawFromDefaults();
 
 			const thread = existingThread
 				? existingThread
@@ -550,25 +557,25 @@ export function createClawApi<Config extends RuntimeConfig>(input: {
 						clawId: claw.id,
 						ownerActorId: args.thread?.ownerActorId ?? args.externalActorId,
 						teamId: args.thread?.teamId ?? claw.teamId,
-						tenantId: args.tenantId,
+						tenantId: claw.tenantId,
 					});
 
-			if (thread.clawId !== claw.id || thread.tenantId !== args.tenantId) {
+			if (thread.clawId !== claw.id || thread.tenantId !== claw.tenantId) {
 				throw validationError(
 					"bind conversation input invalid",
 					"thread does not match conversation claw or tenant",
 					{
 						clawId: claw.id,
+						clawTenantId: claw.tenantId,
 						threadClawId: thread.clawId,
 						threadTenantId: thread.tenantId,
-						tenantId: args.tenantId,
 					},
 				);
 			}
 
 			const binding = await clawsStore.conversationBindings.create({
 				provider: args.provider,
-				tenantId: args.tenantId,
+				endpointKey: args.endpointKey,
 				externalConversationId: args.externalConversationId,
 				externalActorId: args.externalActorId,
 				clawId: claw.id,

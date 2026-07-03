@@ -54,6 +54,8 @@ export type {
 	ClawSendResult,
 } from "./api";
 export {
+	bindConversationClawInput,
+	bindConversationThreadInput,
 	clawApiInputSchemas,
 	clawApiRouteList,
 	clawApiRoutes,

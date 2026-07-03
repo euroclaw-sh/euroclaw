@@ -8,35 +8,13 @@ import {
 } from "@euroclaw/contracts";
 import type { Adapter } from "@euroclaw/storage-core";
 import type { Claw } from "euroclaw";
-import type {
-	Channel,
-	ChannelEndpointListFilter,
-	ChannelEndpointLookup,
-	ChannelEndpointRecord,
-	ChannelEndpointStore,
-	CreateChannelEndpointInput,
-	UpdateChannelEndpointByKeyInput,
-} from "./contracts";
-import { dispatchWebhook, pollChannel } from "./dispatch";
+import type { Channel, EndpointContext } from "../core/contracts";
+import { dispatchWebhook, pollEndpoint } from "../core/dispatch";
 import { channelsModels } from "./schema";
-import { createChannelEndpointsStore } from "./store";
-
-/** The endpoints namespace the plugin exposes on `claw.api.channels.endpoints` — DB registration. */
-export type ChannelEndpointsApi = {
-	upsert: (input: CreateChannelEndpointInput) => Promise<ChannelEndpointRecord>;
-	get: (input: { id: string }) => Promise<ChannelEndpointRecord | null>;
-	getByKey: (
-		input: ChannelEndpointLookup,
-	) => Promise<ChannelEndpointRecord | null>;
-	update: (
-		input: UpdateChannelEndpointByKeyInput,
-	) => Promise<ChannelEndpointRecord | null>;
-	list: (
-		filter?: ChannelEndpointListFilter,
-	) => Promise<ChannelEndpointRecord[]>;
-};
-
-export type ChannelsApi = { readonly endpoints: ChannelEndpointsApi };
+import {
+	type ChannelEndpointStateStore,
+	createChannelEndpointStateStore,
+} from "./store";
 
 export type ChannelsPluginOptions = {
 	/** Plugin id override (default "euroclaw.channels"). */
@@ -47,13 +25,7 @@ export type ChannelsPluginOptions = {
 
 export type ChannelsPlugin<
 	HasCron extends EuroclawCronFlag = EuroclawCronFlag,
-> = EuroclawPlugin<
-	HasCron,
-	readonly string[],
-	{ readonly channels: ChannelsApi }
-> & {
-	readonly $Api: { readonly channels: ChannelsApi };
-};
+> = EuroclawPlugin<HasCron, readonly string[]>;
 
 /** A channel that may carry a compile-time poll marker (providers like telegram set it). */
 type PollAware = Channel & { readonly $poll?: boolean };
@@ -72,25 +44,24 @@ type AnyPoll<List extends readonly PollAware[]> = [
 type ChannelsCronFlag<List extends readonly PollAware[]> =
 	AnyPoll<List> extends true ? "has-cron" : "no-cron";
 
-// The one webhook mount for every channel — dispatch is by `:provider`, then the channel's identify()
-// (header/payload) picks the endpoint, defaulting to "default". Telegram routes by URL + secret-token
-// header, so a single bot needs no per-endpoint path; fan-in providers read the key from the payload.
+// The one webhook mount for the app's own bots — dispatch is by `:provider`, then the channel's
+// identify() (header/payload) picks the code endpoint, defaulting to "default". User-registered bots
+// are the channelConnections plugin's route, not this one.
 const WEBHOOK_PATH = "/channels/:provider/webhook";
 
 /** Narrow the resolved adapter the assembly passes through the configure context's index signature. */
-function contextAdapter(context: unknown): Adapter | undefined {
+export function contextAdapter(context: unknown): Adapter | undefined {
 	if (context === null || typeof context !== "object") return undefined;
 	const value = (context as { adapter?: unknown }).adapter;
 	if (value === null || typeof value !== "object") return undefined;
 	return value as Adapter;
 }
 
-function assertUniqueChannels(channels: readonly Channel[]): void {
+/** One channel per provider (webhook dispatch is by provider) and unique code endpoint keys. */
+export function assertUniqueChannels(channels: readonly Channel[]): void {
 	const providers = new Set<string>();
 	const endpoints = new Set<string>();
 	for (const channel of channels) {
-		// The webhook route dispatches by `:provider` alone, so a second channel of the same provider
-		// could never receive a webhook — refuse loudly instead of letting the last one silently win.
 		if (providers.has(channel.provider)) {
 			throw configurationError("duplicate channel provider", {
 				provider: channel.provider,
@@ -112,21 +83,11 @@ function assertUniqueChannels(channels: readonly Channel[]): void {
 	}
 }
 
-function makeEndpointsApi(store: ChannelEndpointStore): ChannelEndpointsApi {
-	return {
-		upsert: (input) => store.upsert(input),
-		get: ({ id }) => store.get(id),
-		getByKey: (input) => store.getByKey(input),
-		update: (input) => store.updateByKey(input),
-		list: (filter) => store.list(filter),
-	};
-}
-
 /**
- * The channels plugin: one webhook route dispatched by provider/endpoint, one poll cron over every
- * poll-capable channel, the `channel_endpoint` table (declared via the schema slot), and the endpoint
- * registration api. The endpoint store is built from the assembly's adapter at configure time (skills
- * precedent) — channels persist state, so a database is required.
+ * The channels plugin — the app's own bots, the socialProviders/genericOAuth analog: one shared bot
+ * per provider declared in code, serving every user of the app. Credentials stay in code; the
+ * channel_endpoint table holds only operational state (poll cursor, last traffic, last error). For
+ * user-registered bots see channelConnections (the SSO analog).
  */
 export function channels<const List extends readonly PollAware[]>(
 	list: List,
@@ -142,7 +103,7 @@ export function channels<const List extends readonly PollAware[]>(
 function buildChannelsPlugin(
 	list: readonly Channel[],
 	options: ChannelsPluginOptions,
-	store: ChannelEndpointStore | undefined,
+	store: ChannelEndpointStateStore | undefined,
 ): ChannelsPlugin {
 	assertUniqueChannels(list);
 	const now = options.now ?? (() => new Date().toISOString());
@@ -151,17 +112,19 @@ function buildChannelsPlugin(
 		list.map((channel) => [channel.provider, channel]),
 	);
 	const hasWebhook = list.some((channel) => channel.supports.webhook);
-	const hasPoll = list.some(
-		(channel) =>
-			channel.supports.poll &&
-			channel.codeEndpoints.some((endpoint) => endpoint.mode === "poll"),
+	const pollTargets = list.flatMap((channel) =>
+		channel.supports.poll
+			? channel.codeEndpoints
+					.filter((endpoint) => endpoint.mode === "poll")
+					.map((endpoint) => ({ channel, endpoint }))
+			: [],
 	);
 
-	const requireStore = (): ChannelEndpointStore => {
+	const requireStore = (): ChannelEndpointStateStore => {
 		if (!store) {
 			throw configurationError("channels requires a database adapter", {
 				reason:
-					"pass a database to createClaw so channels can persist endpoints",
+					"pass a database to createClaw so channels can persist endpoint state",
 			});
 		}
 		return store;
@@ -176,8 +139,28 @@ function buildChannelsPlugin(
 		return buildChannelsPlugin(
 			list,
 			options,
-			createChannelEndpointsStore(adapter, { now }),
+			createChannelEndpointStateStore(adapter, { now }),
 		);
+	};
+
+	// A code endpoint's normalized view: no secrets (the client lives on the channel), bind defaults
+	// straight from code config, cursor from the persisted state row.
+	const contextFor = async (
+		channel: Channel,
+		endpoint: { key: string; mode: "webhook" | "poll" },
+	): Promise<EndpointContext> => {
+		const state = await requireStore().get({
+			provider: channel.provider,
+			endpointKey: endpoint.key,
+		});
+		return {
+			provider: channel.provider,
+			endpointKey: endpoint.key,
+			mode: endpoint.mode,
+			cursor: state?.cursor,
+			claw: channel.bind?.claw,
+			thread: channel.bind?.thread,
+		};
 	};
 
 	const webhookRoute: EuroclawRoute = {
@@ -190,15 +173,30 @@ function buildChannelsPlugin(
 				return { status: 404, body: { ok: false, error: "unknown provider" } };
 			}
 			const rawBody = await request.text();
-			// dispatchWebhook applies channel.identify() over this fallback, so a single-endpoint
-			// channel needs no key in the URL — it resolves to "default".
+			const inbound = { headers: request.headers, rawBody };
+			// identify() may pick the code endpoint (fan-in providers); default is "default".
+			const endpointKey = channel.identify?.(inbound) ?? "default";
+			const code = channel.codeEndpoints.find(
+				(endpoint) => endpoint.key === endpointKey,
+			);
+			if (!code) {
+				return { status: 404, body: { ok: false, error: "unknown endpoint" } };
+			}
+			const endpoint = await contextFor(channel, code);
 			const result = await dispatchWebhook({
 				claw: claw as Claw,
 				channel,
-				store: requireStore(),
-				endpointKey: "default",
-				request: { headers: request.headers, rawBody },
-				now,
+				endpoint,
+				request: inbound,
+				persist: (event) =>
+					requireStore().record(
+						{
+							provider: channel.provider,
+							endpointKey: code.key,
+							mode: code.mode,
+						},
+						event,
+					),
 			});
 			return { status: result.status, body: result.body };
 		},
@@ -208,13 +206,22 @@ function buildChannelsPlugin(
 		id: "channels:poll",
 		handler: async ({ claw, limit }: { claw: unknown; limit?: number }) => {
 			let processed = 0;
-			for (const channel of list) {
-				const result = await pollChannel({
+			for (const target of pollTargets) {
+				const endpoint = await contextFor(target.channel, target.endpoint);
+				const result = await pollEndpoint({
 					claw: claw as Claw,
-					channel,
-					store: requireStore(),
-					now,
+					channel: target.channel,
+					endpoint,
 					limit,
+					persist: (event) =>
+						requireStore().record(
+							{
+								provider: target.channel.provider,
+								endpointKey: target.endpoint.key,
+								mode: target.endpoint.mode,
+							},
+							event,
+						),
 				});
 				processed += result.processed;
 			}
@@ -227,12 +234,10 @@ function buildChannelsPlugin(
 
 	return {
 		id: options.id ?? "euroclaw.channels",
-		$HasCron: hasPoll ? "has-cron" : "no-cron",
-		$Api: {} as { readonly channels: ChannelsApi },
+		$HasCron: pollTargets.length > 0 ? "has-cron" : "no-cron",
 		schema: channelsModels,
 		configure,
 		routes: hasWebhook ? [webhookRoute] : [],
-		cron: hasPoll ? [pollTask] : [],
-		api: () => ({ channels: { endpoints: makeEndpointsApi(requireStore()) } }),
+		cron: pollTargets.length > 0 ? [pollTask] : [],
 	};
 }

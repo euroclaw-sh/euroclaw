@@ -134,7 +134,7 @@ export type CheckpointStore = {
 
 export type ConversationBindingLookup = {
 	provider: string;
-	tenantId: string;
+	endpointKey: string;
 	externalConversationId: string;
 };
 
