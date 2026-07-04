@@ -45,3 +45,5 @@ export {
 	runtimeRunOptionsWithRecording,
 	runtimeYieldMetadata,
 } from "./runtime";
+export type { SubInvoke } from "./subinvoke";
+export { NESTED_APPROVAL_UNSUPPORTED, NESTED_INVOKER_TOOL } from "./subinvoke";

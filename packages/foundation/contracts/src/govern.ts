@@ -28,6 +28,9 @@ export type ToolGovernance = {
 	) => GateDecision | Promise<GateDecision>;
 	/** Effect semantics for durable execution and compensation tracking. */
 	effect?: ToolEffectPolicy;
+	/** This tool's execute receives a `subInvoke` for governed nested tool calls
+	 *  (capability tools: sandboxes, delegate). Least-authority: absent = no invoker. */
+	invoker?: true;
 };
 
 /**

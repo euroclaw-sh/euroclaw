@@ -21,7 +21,7 @@ import {
 	THREAD_ID_CONTEXT_KEY,
 	validationError,
 } from "@euroclaw/contracts";
-import { createGovernance } from "@euroclaw/core";
+import { createGovernance, type Governance } from "@euroclaw/core";
 import {
 	createApprovalStore,
 	createEffectStore,
@@ -53,6 +53,11 @@ import {
 	type RuntimeRecordingContext,
 	runtimeRecordingContext,
 } from "./events";
+import {
+	NESTED_APPROVAL_UNSUPPORTED,
+	NESTED_INVOKER_TOOL,
+	type SubInvoke,
+} from "./subinvoke";
 import {
 	createRunState,
 	modelFacingTools,
@@ -551,12 +556,18 @@ export function createRuntime<const Config extends RuntimeConfig>(
 				}
 				const executeTool = tool.execute;
 				const args = await rehydrate(call.args);
+				const isInvokerTool =
+					(tool as { euroclaw?: { invoker?: true } }).euroclaw?.invoker ===
+					true;
 				const execute = (abortSignal?: unknown) =>
+					// Blessed seam cast: the AI-SDK ToolCallOptions type is closed; euroclaw extends it
+					// with `subInvoke` for invoker-stamped capability tools only (least authority).
 					executeTool(args, {
 						toolCallId: state.currentToolCallId,
 						messages: state.currentMessages,
 						abortSignal: abortSignal as never,
-					});
+						...(isInvokerTool ? { subInvoke } : {}),
+					} as never);
 				const effectPolicy = (
 					tool as { euroclaw?: { effect?: ToolEffectPolicy } }
 				).euroclaw?.effect;
@@ -681,6 +692,78 @@ export function createRuntime<const Config extends RuntimeConfig>(
 			},
 		});
 		registerToolGates(core, tools);
+
+		// Nested calls (an invoker tool's `subInvoke`) share redaction, audit, plugins, and
+		// identity resolution with the parent core, but structurally lack its two ambient-state
+		// paths: NO approvalStore (nothing can park mid-execution) and a runTool that never
+		// touches the effect store or mutates per-step RunState. It reads only `abortSignal`
+		// (read-only), so it is safe under Promise.all and never inherits the parent's effect id.
+		// Both cores share the one AuditSink → a single interleaved hash chain. Built lazily so a
+		// run that never calls an invoker tool pays nothing.
+		let nested: Governance | undefined;
+		const getNestedCore = (): Governance => {
+			if (nested) return nested;
+			const built = createGovernance({
+				redactor: config.redactor,
+				audit: config.audit,
+				plugins: config.plugins,
+				resolveContext: resolveGovernanceContext,
+				runTool: async (call, _nestedCtx, { rehydrate }) => {
+					abortIfNeeded(state.abortSignal);
+					const tool = tools[call.name];
+					if (!tool || typeof tool.execute !== "function") {
+						throw stateError(`euroclaw: no executable tool "${call.name}"`, {
+							toolName: call.name,
+						});
+					}
+					const args = await rehydrate(call.args);
+					return tool.execute(args, {
+						toolCallId: newId("nested"),
+						messages: [],
+						abortSignal: state.abortSignal as never,
+					});
+				},
+				now,
+			});
+			registerToolGates(built, tools);
+			nested = built;
+			return nested;
+		};
+
+		const subInvoke: SubInvoke = async (name, args, ctx) => {
+			// Recursion guard: an invoker-stamped tool cannot be reached from a nested call.
+			// Nested tools never receive a `subInvoke`, so letting one through would only fail
+			// deeper with a worse error — fail closed at the door.
+			const target = tools[name] as
+				| { euroclaw?: { invoker?: true } }
+				| undefined;
+			if (target?.euroclaw?.invoker) {
+				return {
+					status: "denied",
+					gateId: "runtime:nested-invoke",
+					reason: `tool "${name}" is a capability tool and cannot be invoked from nested execution`,
+					reasonCode: NESTED_INVOKER_TOOL,
+				};
+			}
+			// handleToolCall re-validates args at ingress (arktype jsonObject); the cast only
+			// satisfies the port's JsonObject param for a value we keep as untrusted input.
+			const result = await getNestedCore().handleToolCall(
+				{ name, args: args as JsonObject },
+				ctx,
+			);
+			// A nested needs-approval fails closed AS A VALUE — there is no durable way to park a
+			// live nested execution. Convert to a denied result with a stable reason code.
+			if (result.status === "needs-approval") {
+				return {
+					status: "denied",
+					gateId: result.gateId,
+					reason: `tool "${name}" requires approval and cannot be called from nested execution`,
+					reasonCode: NESTED_APPROVAL_UNSUPPORTED,
+				};
+			}
+			return result;
+		};
+
 		return core;
 	};
 
