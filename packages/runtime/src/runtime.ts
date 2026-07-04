@@ -63,6 +63,7 @@ import {
 	modelFacingTools,
 	type RunState,
 	registerToolGates,
+	toolGovernance,
 } from "./tools";
 
 export type RuntimeModel = Parameters<typeof wrapLanguageModel>[0]["model"];
@@ -556,9 +557,9 @@ export function createRuntime<const Config extends RuntimeConfig>(
 				}
 				const executeTool = tool.execute;
 				const args = await rehydrate(call.args);
-				const isInvokerTool =
-					(tool as { euroclaw?: { invoker?: true } }).euroclaw?.invoker ===
-					true;
+				// The stamp is read ONCE per call; invoker + effect both come from the validated view.
+				const stamp = toolGovernance(tool, call.name);
+				const isInvokerTool = stamp?.invoker === true;
 				const execute = (abortSignal?: unknown) =>
 					// Blessed seam cast: the AI-SDK ToolCallOptions type is closed; euroclaw extends it
 					// with `subInvoke` for invoker-stamped capability tools only (least authority).
@@ -568,9 +569,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 						abortSignal: abortSignal as never,
 						...(isInvokerTool ? { subInvoke } : {}),
 					} as never);
-				const effectPolicy = (
-					tool as { euroclaw?: { effect?: ToolEffectPolicy } }
-				).euroclaw?.effect;
+				const effectPolicy = stamp?.effect;
 				const outputMode = effectOutputMode(effectPolicy);
 				if (!effectStore) return execute(state.abortSignal);
 				if (outputMode === "redacted" && !config.redactor) {
@@ -734,10 +733,8 @@ export function createRuntime<const Config extends RuntimeConfig>(
 			// Recursion guard: an invoker-stamped tool cannot be reached from a nested call.
 			// Nested tools never receive a `subInvoke`, so letting one through would only fail
 			// deeper with a worse error — fail closed at the door.
-			const target = tools[name] as
-				| { euroclaw?: { invoker?: true } }
-				| undefined;
-			if (target?.euroclaw?.invoker) {
+			const target = tools[name];
+			if (target && toolGovernance(target, name)?.invoker === true) {
 				return {
 					status: "denied",
 					gateId: "runtime:nested-invoke",

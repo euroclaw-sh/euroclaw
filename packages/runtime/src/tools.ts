@@ -1,6 +1,11 @@
-import type { ToolGovernance } from "@euroclaw/contracts";
+import {
+	type ToolGovernance,
+	toolGovernance as toolGovernanceSchema,
+	validationError,
+} from "@euroclaw/contracts";
 import type { Governance } from "@euroclaw/core";
 import type { ModelMessage, ToolSet } from "ai";
+import { type } from "arktype";
 import type { RuntimeRecordingContext } from "./events";
 import type { RuntimeAbortSignal } from "./runtime";
 
@@ -30,9 +35,31 @@ export function createRunState(): RunState {
 	};
 }
 
+/**
+ * Read the governance stamp `govern()` attached to a tool. The AI-SDK ToolSet type ERASES
+ * the `euroclaw` field, so the compiler cannot check what a host attached — this is a real
+ * trust boundary, and the contracts schema validates it. A malformed stamp (typo'd
+ * idempotency, wrong risk value) must fail loud here, not fail OPEN downstream where a
+ * misspelled "none" would silently make an effect auto-retryable.
+ */
+export function toolGovernance(
+	tool: object,
+	name: string,
+): ToolGovernance | undefined {
+	if (!("euroclaw" in tool) || tool.euroclaw === undefined) return undefined;
+	const stamp = toolGovernanceSchema(tool.euroclaw);
+	if (stamp instanceof type.errors) {
+		throw validationError(
+			`tool "${name}" carries an invalid governance stamp`,
+			stamp.summary,
+		);
+	}
+	return stamp;
+}
+
 export function registerToolGates(core: Governance, tools: ToolSet): void {
 	for (const [name, tool] of Object.entries(tools)) {
-		const gate = (tool as { euroclaw?: ToolGovernance }).euroclaw?.gate;
+		const gate = toolGovernance(tool, name)?.gate;
 		if (gate) {
 			core.registerGate({
 				id: `tool:${name}`,

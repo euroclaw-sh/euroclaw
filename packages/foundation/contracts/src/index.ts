@@ -150,8 +150,8 @@ export type {
 export { entity, field } from "./entity";
 export type { Event, EventSink } from "./events";
 export { event } from "./events";
-export type { ToolEffectPolicy, ToolGovernance } from "./govern";
-export { govern } from "./govern";
+export type { ToolEffectPolicy, ToolGate, ToolGovernance } from "./govern";
+export { govern, toolEffectPolicy, toolGovernance } from "./govern";
 // ── governance ports: approval, audit, redaction (impls live in @euroclaw/core) ─
 export type {
 	ApprovalMetadataResolver,
