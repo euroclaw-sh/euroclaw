@@ -63,3 +63,47 @@ describe("euroclaw core — entity-derived schemas", () => {
 		expect(thing.storage.thing.fields.name.immutable).toBeUndefined();
 	});
 });
+
+describe("entity schemas — undefined-valued keys drop at the parse", () => {
+	const thing = entity("thing", {
+		id: field.string({ required: true, unique: true, immutable: true }),
+		label: field.string({ required: true }),
+		note: field.string(),
+		count: field.number(),
+	} as const);
+
+	it("schema() parses flat literals: present-but-undefined optionals come out ABSENT", () => {
+		const input = thing.schema({ omit: ["id"] })({
+			label: "a",
+			note: undefined,
+			count: undefined,
+		});
+		expect(input).not.toBeInstanceOf(type.errors);
+		expect(input).toEqual({ label: "a" });
+		expect(Object.keys(input)).toEqual(["label"]);
+	});
+
+	it("updateSchema() does the same for patches, and never mutates the caller's object", () => {
+		const patch = { label: "b", note: undefined };
+		const parsed = thing.updateSchema()(patch);
+		expect(parsed).not.toBeInstanceOf(type.errors);
+		expect(Object.keys(parsed)).toEqual(["label"]);
+		expect(Object.keys(patch)).toEqual(["label", "note"]); // caller untouched
+	});
+
+	it("record parsing normalizes adapter rows the same way", () => {
+		const row = thing.record({
+			id: "t1",
+			label: "a",
+			note: undefined,
+		});
+		expect(row).not.toBeInstanceOf(type.errors);
+		expect(Object.keys(row)).toEqual(["id", "label"]);
+	});
+
+	it("required fields still reject undefined — dropping never masks a missing required value", () => {
+		expect(
+			thing.schema({ omit: ["id"] })({ label: undefined, note: "x" }),
+		).toBeInstanceOf(type.errors);
+	});
+});

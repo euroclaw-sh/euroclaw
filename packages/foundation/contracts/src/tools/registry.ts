@@ -13,8 +13,7 @@
 // input TYPES. The behavioural store ports the stores satisfy live next door in ./registry-ports.
 
 import { type } from "arktype";
-import type { JsonObject } from "../common";
-import type { EntityInput, EntityRecord } from "../entity";
+import type { EntityInput, EntityRecord, EntityUpdateInput } from "../entity";
 import { entity, field } from "../entity";
 
 // ── spec_registration — one row per (organizationId, source); re-registration REPLACES it ──────
@@ -103,16 +102,13 @@ export type RegisteredToolCreate = EntityInput<
 	"id" | "createdAt" | "updatedAt"
 >;
 
-/** The mutable slice a re-registration diff writes; the store stamps `updatedAt`. */
-export type RegisteredToolPatch = {
-	name?: string;
-	address?: string;
-	description?: string;
-	inputSchema?: JsonObject;
-	governance?: JsonObject;
-	binding?: JsonObject;
-	contentVersion?: string;
-};
+/** The mutable slice a re-registration diff writes — derived from the fields' own
+ *  `immutable`/`input` flags (entity.updateSchema); the store validates every patch through it
+ *  and stamps `updatedAt` itself (a caller-supplied one is overridden). */
+export const registeredToolPatch = registeredToolEntity.updateSchema();
+export type RegisteredToolPatch = EntityUpdateInput<
+	typeof registeredToolFields
+>;
 
 /** The storage schema backing the RegisteredToolStore. */
 export const registeredToolSchema = registeredToolEntity.storage;

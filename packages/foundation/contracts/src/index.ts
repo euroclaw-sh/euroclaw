@@ -329,6 +329,7 @@ export {
 	factsOverlaySchema,
 	factsOverlayUpsert,
 	registeredToolCreate,
+	registeredToolPatch,
 	registeredToolRecord,
 	registeredToolSchema,
 	specRegistrationRecord,

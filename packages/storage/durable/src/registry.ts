@@ -23,6 +23,7 @@ import {
 	type RegisteredToolRecord,
 	type RegisteredToolStore,
 	registeredToolCreate as registeredToolCreateSchema,
+	registeredToolPatch as registeredToolPatchSchema,
 	registeredToolRecord as registeredToolRecordSchema,
 	registeredToolSchema,
 	type SpecRegistrationRecord,
@@ -100,6 +101,13 @@ export function createRegistryStores(
 		}
 		return valid;
 	}
+	function validateToolPatch(patch: unknown): RegisteredToolPatch {
+		const valid = registeredToolPatchSchema(patch);
+		if (valid instanceof type.errors) {
+			throw validationError("registered tool patch invalid", valid.summary);
+		}
+		return valid;
+	}
 	function validateOverlay(record: unknown): FactsOverlayRecord {
 		const valid = factsOverlayRecordSchema(record);
 		if (valid instanceof type.errors) {
@@ -146,18 +154,13 @@ export function createRegistryStores(
 				}
 				return validateSpec(updated);
 			}
-			const record: SpecRegistrationRecord = {
+			const record = validateSpec({
+				...valid,
 				id: newId(),
-				organizationId: valid.organizationId,
-				source: valid.source,
-				specBlob: valid.specBlob,
-				contentVersion: valid.contentVersion,
-				report: valid.report,
-				registeredBy: valid.registeredBy,
 				createdAt: stamp,
 				updatedAt: stamp,
-			};
-			await specDb.create({ model: SPEC_MODEL, data: validateSpec(record) });
+			});
+			await specDb.create({ model: SPEC_MODEL, data: record });
 			return record;
 		},
 
@@ -202,44 +205,27 @@ export function createRegistryStores(
 		},
 
 		async create(input) {
+			// Parsed inputs carry no undefined-valued keys (the entity schemas drop them), so the
+			// spread writes exactly the present fields — absent stays absent at the adapter.
 			const valid = validateToolInput(input);
 			const stamp = now();
-			const record: RegisteredToolRecord = {
+			const record = validateTool({
+				...valid,
 				id: newId(),
-				organizationId: valid.organizationId,
-				source: valid.source,
-				name: valid.name,
-				address: valid.address,
-				...(valid.description !== undefined
-					? { description: valid.description }
-					: {}),
-				inputSchema: valid.inputSchema,
-				governance: valid.governance,
-				binding: valid.binding,
-				contentVersion: valid.contentVersion,
 				createdAt: stamp,
 				updatedAt: stamp,
-			};
-			await toolDb.create({ model: TOOL_MODEL, data: validateTool(record) });
+			});
+			await toolDb.create({ model: TOOL_MODEL, data: record });
 			return record;
 		},
 
-		async update(id, patch: RegisteredToolPatch) {
-			const update: Record<string, unknown> = { updatedAt: now() };
-			if (patch.name !== undefined) update.name = patch.name;
-			if (patch.address !== undefined) update.address = patch.address;
-			if (patch.description !== undefined)
-				update.description = patch.description;
-			if (patch.inputSchema !== undefined)
-				update.inputSchema = patch.inputSchema;
-			if (patch.governance !== undefined) update.governance = patch.governance;
-			if (patch.binding !== undefined) update.binding = patch.binding;
-			if (patch.contentVersion !== undefined)
-				update.contentVersion = patch.contentVersion;
+		async update(id, patch) {
+			const valid = validateToolPatch(patch);
 			const row = await toolDb.update<RegisteredToolRecord>({
 				model: TOOL_MODEL,
 				where: [whereEq("id", id)],
-				update,
+				// The store owns updatedAt — spread first so a caller-supplied one is overridden.
+				update: { ...valid, updatedAt: now() },
 			});
 			return row ? validateTool(row) : null;
 		},
@@ -269,22 +255,13 @@ export function createRegistryStores(
 				],
 			});
 			const stamp = now();
-			const record: FactsOverlayRecord = {
+			const record = validateOverlay({
+				...valid,
 				id: newId(),
-				organizationId: valid.organizationId,
-				actionId: valid.actionId,
-				...(valid.access !== undefined ? { access: valid.access } : {}),
-				...(valid.groups !== undefined ? { groups: valid.groups } : {}),
-				...(valid.resource !== undefined ? { resource: valid.resource } : {}),
-				...(valid.audit !== undefined ? { audit: valid.audit } : {}),
-				updatedBy: valid.updatedBy,
 				createdAt: stamp,
 				updatedAt: stamp,
-			};
-			await overlayDb.create({
-				model: OVERLAY_MODEL,
-				data: validateOverlay(record),
 			});
+			await overlayDb.create({ model: OVERLAY_MODEL, data: record });
 			return record;
 		},
 

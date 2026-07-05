@@ -186,15 +186,15 @@ export function createSpecRegistry(
 				);
 				const binding = asJsonObject(tool.binding, "registered tool binding");
 				const prior = priorByAddress.get(address);
+				// Flat literals — the store's entity schemas drop undefined-valued keys, so an
+				// absent description stays absent without conditional spreads here.
 				if (!prior) {
 					await stores.registeredTools.create({
 						organizationId: input.organizationId,
 						source: input.source,
 						name: tool.name,
 						address,
-						...(tool.description !== undefined
-							? { description: tool.description }
-							: {}),
+						description: tool.description,
 						inputSchema: tool.inputSchema,
 						governance,
 						binding,
@@ -205,9 +205,7 @@ export function createSpecRegistry(
 					await stores.registeredTools.update(prior.id, {
 						name: tool.name,
 						address,
-						...(tool.description !== undefined
-							? { description: tool.description }
-							: {}),
+						description: tool.description,
 						inputSchema: tool.inputSchema,
 						governance,
 						binding,
