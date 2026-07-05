@@ -4,12 +4,12 @@
 // schema). What extraction PRODUCES (tool definitions, bindings, diagnostics) is host-facing
 // plain TS — not a boundary.
 
-import { type } from "arktype";
 import type {
 	SourceDiagnostic,
 	SourceExtraction,
 	SourceTool,
-} from "../contracts";
+} from "@euroclaw/contracts";
+import { type } from "arktype";
 
 export const HTTP_METHODS = [
 	"get",

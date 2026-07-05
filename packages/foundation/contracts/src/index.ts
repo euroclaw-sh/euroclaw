@@ -312,3 +312,33 @@ export type {
 	Where,
 	WhereOperator,
 } from "./storage";
+// ── tool registry: durable rows for uploaded tool surfaces (impls in storage/runtime) ──
+export type {
+	FactsOverlayRecord,
+	FactsOverlayStore,
+	FactsOverlayUpsert,
+	RegisteredToolCreate,
+	RegisteredToolPatch,
+	RegisteredToolRecord,
+	RegisteredToolStore,
+	SpecRegistrationRecord,
+	SpecRegistrationStore,
+	SpecRegistrationUpsert,
+} from "./tools/registry";
+export {
+	factsOverlayRecord,
+	factsOverlaySchema,
+	factsOverlayUpsert,
+	registeredToolCreate,
+	registeredToolRecord,
+	registeredToolSchema,
+	specRegistrationRecord,
+	specRegistrationSchema,
+	specRegistrationUpsert,
+} from "./tools/registry";
+// ── tool sources: what every extractor produces (types only; impls in @euroclaw/runtime) ──
+export type {
+	SourceDiagnostic,
+	SourceExtraction,
+	SourceTool,
+} from "./tools/source";
