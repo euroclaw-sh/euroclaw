@@ -1,0 +1,30 @@
+# @euroclaw/vendors
+
+Vendor-coupled authoring glue, one subpath per vendor — the foundation-tier home for the small
+pieces that must import a third-party SDK. Feather-light by design: each subpath depends on
+`@euroclaw/contracts` and its vendor SDK only — no runtime, no engine — so a host's shared tools
+library (or a euroclaw plugin, under the plugins-import-foundation-only rule) can use it without
+dragging the execution stack. There is deliberately no root export.
+
+## `@euroclaw/vendors/ai-sdk`
+
+`tool()` defines a governed AI-SDK tool in one place: the model-facing definition
+(description/inputSchema/execute — input inference preserved, the overloads mirror the AI SDK's
+own) plus the euroclaw governance stamp (`gate`/`effect`/`invoker` and the authz-model facts
+`access`/`groups`/`resource`/`audit` — what the OpenAPI/MCP generators derive from specs, an
+author declares here). `govern()` (re-exported from contracts) remains the adoption path for
+tools you didn't author; both produce the identical stamped shape the runtime reads back through
+its validated reader.
+
+Schemas: `inputSchema` takes the AI SDK's own schemas (zod / `jsonSchema()` / lazy) **or any
+standard-schema library directly**, following the Elysia multi-schema pattern (a minimal
+structural `~standard` marker; the input type computed from the captured schema generic). The
+bridge is **capability-based, not vendor-based**: a standard schema that can emit JSON Schema
+(arktype's native `toJsonSchema()`) is bridged automatically — provider-facing JSON Schema from
+the library, validation incl. morphs through `~standard.validate`, inference preserved; one that
+can't fails loud, because bare standard-schema defines validation only and a tool schema must
+produce the JSON Schema sent to the provider. `standardSchema()` is exported for direct use with
+plain `aiTool`. euroclaw tools are always executable (the chokepoint requires `execute`), so
+`tool()` has one signature and returns a plain `AuthoredTool` shape (structurally assignable to
+the AI SDK's `Tool`, asserted by a type test — no casts); exotic AI-SDK fields (streaming hooks,
+provider-defined tools) go through `govern(aiTool(...))`.

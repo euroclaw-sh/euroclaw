@@ -154,6 +154,41 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+---
+
+## Elysia
+
+- **Project:** Elysia — https://github.com/elysiajs/elysia (local source reviewed at `/Users/konstantinponomarev/Downloads/elysia-main`)
+- **License:** MIT
+- **Used in euroclaw:** the multi-schema-library acceptance mechanism is *adapted
+  from* Elysia's **patterns** (not copied code) — the minimal structural
+  `StandardSchemaV1Like` marker interface (reduced to what inference/validation
+  need, cf. `src/types.ts:58-84`) and the UnwrapSchema-style approach of capturing
+  the schema as its own generic and computing the value type from it
+  (cf. `UnwrapSchema`/`UnwrapBodySchema`, `src/types.ts`). Files:
+  - `packages/foundation/contracts/src/standard-schema.ts` — the marker interface and detection guards.
+  - `packages/foundation/vendors/src/ai-sdk/index.ts` — the captured-generic `ToolInput<S>` unwrap.
+
+  euroclaw diverges where Elysia stops: Elysia keeps standard schemas as opaque
+  validators; euroclaw's tool schemas must also emit provider-facing JSON Schema,
+  so bridging is capability-based (`toJsonSchema()` presence) — that part is
+  euroclaw's own.
+
+  > Note: this is listed as a provenance courtesy. The implementation is independent
+  > TypeScript. If we later copy verbatim code, update this notice accordingly.
+
+### License (verbatim)
+
+```
+Copyright 2022 saltyAom
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+```
+
 <!--
 To add another dependency you copy/adapt CODE from, duplicate the block above:
 

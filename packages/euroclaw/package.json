@@ -9,6 +9,10 @@
 		".": {
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
+		},
+		"./ai": {
+			"types": "./dist/ai.d.ts",
+			"import": "./dist/ai.js"
 		}
 	},
 	"main": "./dist/index.js",
@@ -28,6 +32,7 @@
 		"@euroclaw/runtime": "workspace:*",
 		"@euroclaw/storage-durable": "workspace:*",
 		"@euroclaw/storage-kysely": "workspace:*",
+		"@euroclaw/vendors": "workspace:*",
 		"arktype": "2.2.0",
 		"kysely": "0.29.2"
 	},

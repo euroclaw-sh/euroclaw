@@ -293,6 +293,14 @@ export {
 	runCheckpointSchema,
 	runCheckpointStatus,
 } from "./run-checkpoint";
+// ── standard-schema interop: accept any standard-schema library without depending on one ──────
+export type {
+	JsonSchemaSource,
+	StandardIssue,
+	StandardResult,
+	StandardSchemaV1Like,
+} from "./standard-schema";
+export { hasToJsonSchema, isStandardSchema } from "./standard-schema";
 // ── the storage protocol (implementations live in @euroclaw/storage-*) ────────
 export type {
 	Adapter,

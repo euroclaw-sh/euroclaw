@@ -1,0 +1,43 @@
+{
+	"name": "@euroclaw/vendors",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "Vendor-coupled authoring glue for euroclaw, one subpath per vendor. `@euroclaw/vendors/ai-sdk`: tool() defines a governed AI-SDK tool in one place — the model-facing definition plus the governance stamp. Feather-light: contracts + the vendor SDK only, no runtime.",
+	"license": "MIT",
+	"author": "Konstantin Ponomarev",
+	"homepage": "https://github.com/euroclaw-sh/euroclaw#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/euroclaw-sh/euroclaw.git",
+		"directory": "packages/foundation/vendors"
+	},
+	"bugs": {
+		"url": "https://github.com/euroclaw-sh/euroclaw/issues"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		"./ai-sdk": {
+			"types": "./dist/ai-sdk/index.d.ts",
+			"import": "./dist/ai-sdk/index.js"
+		}
+	},
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "rm -rf dist && tsc",
+		"test": "vitest run",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@euroclaw/contracts": "workspace:*",
+		"ai": "5.0.203"
+	},
+	"devDependencies": {
+		"@euroclaw/core": "workspace:*",
+		"arktype": "2.2.0"
+	}
+}
