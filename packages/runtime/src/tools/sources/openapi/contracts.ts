@@ -96,6 +96,40 @@ export type OpenApiBinding = {
 	deprecated?: boolean;
 };
 
+// ── stored-binding boundary (arktype) ─────────────────────────────────────────────────────────
+// The extractor PRODUCES OpenApiBinding as host-facing plain TS. Reading it back from a
+// registered_tool row is a trust BOUNDARY (an adapter read) — the invoker parses the stored blob
+// through this schema (fail loud) before it becomes a request, so a corrupted/hostile stored
+// binding can never drive a fetch. Structurally the counterpart of the produced type above.
+
+const openApiAuthSchemeSchema = type({
+	type: "'apiKey'",
+	in: "'header' | 'query'",
+	name: "string",
+})
+	.or({ type: "'http'", scheme: "'bearer' | 'basic'" })
+	.or({ type: "'oauth2' | 'openIdConnect'" });
+
+export const openApiBinding = type({
+	method:
+		"'get' | 'put' | 'post' | 'delete' | 'patch' | 'head' | 'options' | 'trace'",
+	path: "string",
+	"server?": "string",
+	parameters: type({
+		name: "string",
+		in: "'path' | 'query' | 'header'",
+		required: "boolean",
+		"style?": "string",
+		"explode?": "boolean",
+	}).array(),
+	"bodyContentType?": "string",
+	"bodyRequired?": "boolean",
+	"bodyWrapped?": "boolean",
+	"security?": openApiSecurityRequirement.array(),
+	"authSchemes?": type({ "[string]": openApiAuthSchemeSchema }),
+	"deprecated?": "boolean",
+});
+
 /** Input schema: parameters + (flattened) JSON body properties, local $refs inlined.
  *  Governance: verb→access, verb/tag groups (see extractor header). */
 export type OpenApiTool = SourceTool<OpenApiBinding>;
