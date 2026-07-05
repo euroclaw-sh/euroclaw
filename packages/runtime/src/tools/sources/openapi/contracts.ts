@@ -63,6 +63,16 @@ export type OpenApiParameterBinding = {
 	explode?: boolean;
 };
 
+/** A security-scheme DEFINITION the invoker needs to PLACE a credential — the counterpart to the
+ *  requirement lists in `OpenApiBinding.security`. `apiKey`: material goes into the named header or
+ *  query param. `http`/`bearer`|`basic`: material becomes an `Authorization` header. `oauth2`/
+ *  `openIdConnect`: only the type is captured — material comes from a token-minting resolver and is
+ *  placed as a bearer token (the flow/token endpoint live inside the resolver, not here). */
+export type OpenApiAuthScheme =
+	| { type: "apiKey"; in: "header" | "query"; name: string }
+	| { type: "http"; scheme: "bearer" | "basic" }
+	| { type: "oauth2" | "openIdConnect" };
+
 export type OpenApiBinding = {
 	method: OpenApiMethod;
 	/** Path template as authored, e.g. "/pets/{petId}". */
@@ -78,6 +88,11 @@ export type OpenApiBinding = {
 	/** The spec's security requirements (operation ?? document), shape-checked but unresolved —
 	 *  resolving schemes to secrets is the invoker's concern. `[]` means explicitly public. */
 	security?: readonly Record<string, readonly string[]>[];
+	/** The scheme DEFINITIONS the `security` requirements reference, denormalized from the document's
+	 *  components.securitySchemes so the invoker stays a pure function of the row (no join to the
+	 *  spec_registration blob at call time). A referenced-but-unsupported scheme is dropped with a
+	 *  warning here; the invoker fails loud at call time if a REQUIRED scheme is missing. */
+	authSchemes?: Record<string, OpenApiAuthScheme>;
 	deprecated?: boolean;
 };
 
