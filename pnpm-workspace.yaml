@@ -21,3 +21,7 @@ onlyBuiltDependencies:
   - prisma
   - "@prisma/client"
   - "@prisma/engines"
+# Explicitly ignored build scripts (not needed to run): a fresh install otherwise fails pnpm's
+# verify-deps-before-run check with ERR_PNPM_IGNORED_BUILDS.
+ignoredBuiltDependencies:
+  - msw
