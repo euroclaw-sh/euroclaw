@@ -12,7 +12,6 @@ import {
 	type AuthzActionInput,
 	actionInputsFromRegisteredTools,
 	buildAuthzModel,
-	type FactsOverlayEntry,
 	mergeFactsOverlay,
 	projectArgs,
 } from "@euroclaw/authz";
@@ -50,21 +49,12 @@ export type AssembledOrgActions = {
 	unmatched: string[];
 };
 
-/** Map a stored overlay row to the merge entry (absent optionals stay absent). */
-function overlayEntry(row: FactsOverlayRecord): FactsOverlayEntry {
-	return {
-		actionId: row.actionId,
-		...(row.access !== undefined ? { access: row.access } : {}),
-		...(row.groups !== undefined ? { groups: row.groups } : {}),
-		...(row.resource !== undefined ? { resource: row.resource } : {}),
-		...(row.audit !== undefined ? { audit: row.audit } : {}),
-	};
-}
-
 /**
  * Assemble an organization's action model + view. `base` carries the code-tool stamps and domain
  * verbs (they exist with no registered row); registered rows become dotted tool actions; the facts
  * overlay merges last (overlay-wins, loosenings reported). The SAME function the router compiles.
+ * Overlay rows pass to the merge as-is — a FactsOverlayRecord IS a FactsOverlayEntry structurally
+ * (the row was already arktype-parsed at the store read; no re-mapping, no re-validation).
  */
 export function assembleOrgActions(input: {
 	base?: readonly AuthzActionInput[];
@@ -80,7 +70,7 @@ export function assembleOrgActions(input: {
 	);
 	const merged = mergeFactsOverlay(
 		[...(input.base ?? []), ...registered],
-		(input.overlay ?? []).map(overlayEntry),
+		input.overlay ?? [],
 	);
 	const model = buildAuthzModel(merged.inputs);
 	const actions: ActionView[] = model.actions.map((action) => {
