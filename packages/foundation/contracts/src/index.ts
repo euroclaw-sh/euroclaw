@@ -315,14 +315,11 @@ export type {
 // ── tool registry: durable rows for uploaded tool surfaces (impls in storage/runtime) ──
 export type {
 	FactsOverlayRecord,
-	FactsOverlayStore,
 	FactsOverlayUpsert,
 	RegisteredToolCreate,
 	RegisteredToolPatch,
 	RegisteredToolRecord,
-	RegisteredToolStore,
 	SpecRegistrationRecord,
-	SpecRegistrationStore,
 	SpecRegistrationUpsert,
 } from "./tools/registry";
 export {
@@ -336,6 +333,11 @@ export {
 	specRegistrationSchema,
 	specRegistrationUpsert,
 } from "./tools/registry";
+export type {
+	FactsOverlayStore,
+	RegisteredToolStore,
+	SpecRegistrationStore,
+} from "./tools/registry-ports";
 // ── tool sources: what every extractor produces (types only; impls in @euroclaw/runtime) ──
 export type {
 	SourceDiagnostic,
