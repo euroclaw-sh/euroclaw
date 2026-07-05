@@ -8,12 +8,9 @@ import {
 	approvalSchema,
 	effectSchema,
 	entity,
-	factsOverlaySchema,
 	field,
 	piiMappingSchema,
-	registeredToolSchema,
 	runCheckpointSchema,
-	specRegistrationSchema,
 } from "@euroclaw/contracts";
 
 const teamMemberEntity = entity("team_member", {
@@ -42,12 +39,4 @@ export const teamSchema = {
 	...teamInviteEntity.storage,
 } satisfies SchemaDeclaration;
 
-export {
-	approvalSchema,
-	effectSchema,
-	factsOverlaySchema,
-	piiMappingSchema,
-	registeredToolSchema,
-	runCheckpointSchema,
-	specRegistrationSchema,
-};
+export { approvalSchema, effectSchema, piiMappingSchema, runCheckpointSchema };

@@ -50,10 +50,8 @@ export { NESTED_APPROVAL_UNSUPPORTED, NESTED_INVOKER_TOOL } from "./subinvoke";
 export type {
 	OpenApiExtraction,
 	OpenApiTool,
-	SpecRegistrationInput,
 	SpecRegistrationReport,
 	SpecRegistry,
-	SpecRegistryOptions,
 } from "./tools";
 export {
 	createSpecRegistry,

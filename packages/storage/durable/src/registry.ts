@@ -38,7 +38,7 @@ import { schemaAdapter } from "@euroclaw/storage-core";
 import { bytesToHex, randomBytes } from "@noble/hashes/utils.js";
 import { type } from "arktype";
 
-export type RegistryStoresOptions = {
+type RegistryStoresOptions = {
 	/** Time source — for deterministic createdAt/updatedAt in tests. */
 	now?: () => string;
 };

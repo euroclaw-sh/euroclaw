@@ -19,7 +19,12 @@ import {
 	type RuntimeEventSink,
 } from "@euroclaw/runtime";
 import { schemaAdapter } from "@euroclaw/storage-core";
-import { createClawsStore, createEffectStore } from "@euroclaw/storage-durable";
+import {
+	createClawsStore,
+	createEffectStore,
+	createRegistryStores,
+	type RegistryStores,
+} from "@euroclaw/storage-durable";
 import { type as ark } from "arktype";
 import {
 	type ClawApi,
@@ -65,6 +70,7 @@ export {
 export type ClawStores = {
 	claws?: ClawsStore;
 	effects?: EffectStore;
+	registry?: RegistryStores;
 };
 
 export type ClawConfig<Config extends RuntimeConfig = RuntimeConfig> = Omit<
@@ -325,6 +331,10 @@ export function createClaw<const Config extends ClawConfig<RuntimeConfig>>(
 		config.stores?.effects ??
 		configuredEffectStore ??
 		(adapter ? createEffectStore(adapter) : undefined);
+	// The tool registry rides the same adapter — it's product durable state, not a plugin.
+	const registryStores =
+		config.stores?.registry ??
+		(adapter ? createRegistryStores(adapter) : undefined);
 	const eventSinks = [
 		...(clawsStore ? [createClawRuntimeEventSink(clawsStore)] : []),
 		...eventSinksFrom(config.events),
@@ -369,6 +379,7 @@ export function createClaw<const Config extends ClawConfig<RuntimeConfig>>(
 		effects: effectsStore,
 		engine: engine?.engine,
 		plugins,
+		registry: registryStores,
 		runs: engine?.runs,
 		runtime,
 	};
@@ -388,4 +399,6 @@ export type { Runtime, RuntimeConfig, RuntimeResult } from "@euroclaw/runtime";
 export { govern } from "@euroclaw/runtime";
 export type { ClawDatabase } from "./database";
 export { createClawRuntimeEventSink } from "./events";
+export type { ActionView } from "./registry";
+export { assembleOrgActions, registerOpenApiSpecTool } from "./registry";
 export { getEuroclawTables } from "./tables";

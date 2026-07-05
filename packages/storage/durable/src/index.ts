@@ -5,18 +5,15 @@ export { createClawsStore } from "./claws";
 export { createEffectStore } from "./effect";
 export type { PiiMappingStoreOptions } from "./pii";
 export { createPiiMappingStore } from "./pii";
-export type { RegistryStores, RegistryStoresOptions } from "./registry";
+export type { RegistryStores } from "./registry";
 export { createRegistryStores } from "./registry";
 export type { RunCheckpointStoreOptions } from "./run-checkpoint";
 export { createRunCheckpointStore } from "./run-checkpoint";
 export {
 	approvalSchema,
 	effectSchema,
-	factsOverlaySchema,
 	piiMappingSchema,
-	registeredToolSchema,
 	runCheckpointSchema,
-	specRegistrationSchema,
 	teamSchema,
 } from "./schema";
 export type {
