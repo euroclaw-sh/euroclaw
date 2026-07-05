@@ -137,6 +137,44 @@ describe("@euroclaw/policy-cedar — Cedar PDP", () => {
 		);
 		expect(operator.status).toBe("denied"); // role != approver → no permit matches → deny-by-default
 	});
+
+	it("organizationId flows from resolution context and cannot be spoofed from caller args", async () => {
+		// The router keys on the org; a policy may also condition on it directly.
+		const policies = `permit(principal, action == Action::"list_pets", resource) when { context.organizationId == "org-a" };`;
+		const inOrg = (organizationId: string) =>
+			createGovernance({
+				plugins: [cedar({ policies })],
+				// resolveContext stamps euroclaw__organizationId exactly as the claw's organization resolver would.
+				resolveContext: (ctx) => ({
+					...ctx,
+					euroclaw__organizationId: organizationId,
+				}),
+				runTool: runEcho,
+			});
+
+		const orgA = await inOrg("org-a").handleToolCall(
+			{ name: "list_pets", args: {} },
+			{ principal: "alice" },
+		);
+		expect(orgA.status).toBe("ok"); // context.organizationId == "org-a" → permitted
+
+		const orgB = await inOrg("org-b").handleToolCall(
+			{ name: "list_pets", args: {} },
+			{ principal: "alice" },
+		);
+		expect(orgB.status).toBe("denied"); // different org → no permit matches
+
+		// A caller cannot forge the org: euroclaw__ keys are stripped before the trusted stamp.
+		const unstamped = createGovernance({
+			plugins: [cedar({ policies })],
+			runTool: runEcho,
+		});
+		const forged = await unstamped.handleToolCall(
+			{ name: "list_pets", args: {} },
+			{ principal: "alice", euroclaw__organizationId: "org-a" },
+		);
+		expect(forged.status).toBe("denied"); // stripped → context.organizationId absent → deny
+	});
 });
 
 describe("model-driven cedar — slice 3", () => {

@@ -46,6 +46,7 @@ import {
 	CLAW_ID_CONTEXT_KEY,
 	configurationError,
 	type EntityRef,
+	ORGANIZATION_CONTEXT_KEY,
 	type PolicyEngine,
 	type PolicyRequest,
 	ROLE_CONTEXT_KEY,
@@ -270,6 +271,7 @@ export function cedar(config: CedarPluginConfig): PolicyPlugin<CedarContext> {
 			const team = Reflect.get(ctx, TEAM_CONTEXT_KEY);
 			const clawId = Reflect.get(ctx, CLAW_ID_CONTEXT_KEY);
 			const runMode = Reflect.get(ctx, RUN_MODE_CONTEXT_KEY);
+			const organizationId = Reflect.get(ctx, ORGANIZATION_CONTEXT_KEY);
 			const indexed = modelIndex?.get(call.name);
 			// Model-aware args: only the PROJECTED subset crosses (Cedar records are closed — an
 			// undeclared attr fails request validation; the projection dropped it from the schema).
@@ -292,6 +294,7 @@ export function cedar(config: CedarPluginConfig): PolicyPlugin<CedarContext> {
 					...(typeof team === "string" ? { team } : {}),
 					...(typeof clawId === "string" ? { clawId } : {}),
 					...(typeof runMode === "string" ? { runMode } : {}),
+					...(typeof organizationId === "string" ? { organizationId } : {}),
 				},
 			};
 		});

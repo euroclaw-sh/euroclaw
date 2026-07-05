@@ -1,0 +1,152 @@
+import type {
+	PolicyEngine,
+	PolicyRequest,
+	PolicyResult,
+} from "@euroclaw/contracts";
+import { describe, expect, it } from "vitest";
+import { createOrgPolicyRouter } from "../src/index";
+
+const req = (organizationId?: unknown): PolicyRequest => ({
+	principal: { type: "User", id: "alice" },
+	action: { type: "Action", id: "x" },
+	resource: { type: "Tool", id: "x" },
+	context: organizationId !== undefined ? { organizationId } : {},
+});
+
+/** A fake engine that tags its decision so a test can tell which bundle answered. */
+const taggedEngine = (tag: string): PolicyEngine => ({
+	authorize: () => ({ decision: "permit", policies: [tag] }),
+});
+
+describe("createOrgPolicyRouter", () => {
+	it("shares one bundle across orgs with the same key (engineFor called once)", async () => {
+		let builds = 0;
+		const router = createOrgPolicyRouter({
+			keyFor: () => "system",
+			engineFor: () => {
+				builds++;
+				return taggedEngine("system");
+			},
+		});
+		const a = await router.authorize(req("org-a"));
+		const b = await router.authorize(req("org-b"));
+		expect(builds).toBe(1);
+		expect(a.policies).toEqual(["system"]);
+		expect(b.policies).toEqual(["system"]);
+	});
+
+	it("rebuilds on the next decision after the key changes (content-keyed invalidation)", async () => {
+		let version = "v1";
+		let builds = 0;
+		const router = createOrgPolicyRouter({
+			keyFor: () => `org-a:${version}`,
+			engineFor: () => {
+				builds++;
+				return taggedEngine(version);
+			},
+		});
+		await router.authorize(req("org-a"));
+		await router.authorize(req("org-a")); // same key — cached
+		expect(builds).toBe(1);
+		version = "v2"; // a registration bumped the content key
+		const after = await router.authorize(req("org-a"));
+		expect(builds).toBe(2);
+		expect(after.policies).toEqual(["v2"]);
+	});
+
+	it("is single-flight: concurrent first decisions build exactly once", async () => {
+		let builds = 0;
+		const router = createOrgPolicyRouter({
+			keyFor: async () => "k",
+			engineFor: async () => {
+				builds++;
+				await Promise.resolve();
+				return taggedEngine("k");
+			},
+		});
+		await Promise.all([
+			router.authorize(req("org-a")),
+			router.authorize(req("org-a")),
+			router.authorize(req("org-a")),
+		]);
+		expect(builds).toBe(1);
+	});
+
+	it("evicts a failed build so the next decision retries", async () => {
+		let builds = 0;
+		const router = createOrgPolicyRouter({
+			keyFor: () => "k",
+			engineFor: () => {
+				builds++;
+				if (builds === 1) throw new Error("build boom");
+				return taggedEngine("recovered");
+			},
+		});
+		await expect(router.authorize(req("org-a"))).rejects.toThrow("build boom");
+		const retried = await router.authorize(req("org-a")); // rejected promise was evicted
+		expect(builds).toBe(2);
+		expect(retried.policies).toEqual(["recovered"]);
+	});
+
+	it("evicts the least-recently-used bundle and rebuilds it on return", async () => {
+		let builds = 0;
+		const seen: (string | undefined)[] = [];
+		const router = createOrgPolicyRouter({
+			maxBundles: 2,
+			keyFor: (org) => org ?? "system",
+			engineFor: (org) => {
+				builds++;
+				seen.push(org);
+				return taggedEngine(org ?? "system");
+			},
+		});
+		await router.authorize(req("a")); // build a
+		await router.authorize(req("b")); // build b
+		await router.authorize(req("a")); // HIT — refreshes a's recency (b is now oldest)
+		await router.authorize(req("c")); // build c → evicts b (LRU)
+		expect(builds).toBe(3);
+		await router.authorize(req("a")); // still cached — no rebuild
+		expect(builds).toBe(3);
+		await router.authorize(req("b")); // was evicted → rebuild
+		expect(builds).toBe(4);
+	});
+
+	it("routes an absent or non-string organizationId to the undefined (system) bundle", async () => {
+		const orgs: (string | undefined)[] = [];
+		const router = createOrgPolicyRouter({
+			keyFor: (org) => org ?? "system",
+			engineFor: (org) => {
+				orgs.push(org);
+				return taggedEngine("system");
+			},
+		});
+		await router.authorize(req()); // no organizationId
+		await router.authorize(req(42)); // non-string
+		expect(orgs).toEqual([undefined]); // both hit the same "system" key, built once, org undefined
+	});
+
+	it("passes the resolved engine's decision through verbatim", async () => {
+		const decision: PolicyResult = {
+			decision: "needs-approval",
+			reason: "confirmation required",
+			policies: ["p1"],
+		};
+		const router = createOrgPolicyRouter({
+			keyFor: (org) => org ?? "system",
+			engineFor: () => ({ authorize: () => decision }),
+		});
+		expect(await router.authorize(req("org-a"))).toEqual(decision);
+	});
+
+	it("exposes the configured capabilities as its own", () => {
+		const router = createOrgPolicyRouter({
+			keyFor: () => "system",
+			engineFor: () => taggedEngine("system"),
+			capabilities: { reads: "identity+args", approvals: true },
+		});
+		expect(router.capabilities).toEqual({
+			reads: "identity+args",
+			approvals: true,
+		});
+	});
+});
