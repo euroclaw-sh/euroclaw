@@ -13,8 +13,11 @@ import {
 	type EuroclawPlugin,
 	effectSchema,
 	entity,
+	factsOverlaySchema,
 	piiMappingSchema,
+	registeredToolSchema,
 	runCheckpointSchema,
+	specRegistrationSchema,
 } from "@euroclaw/contracts";
 import type { SchemaDeclaration } from "@euroclaw/storage-core";
 import { teamSchema } from "@euroclaw/storage-durable";
@@ -28,6 +31,10 @@ const CORE_TABLES: SchemaDeclaration = {
 	...piiMappingSchema,
 	...runCheckpointSchema,
 	...teamSchema,
+	// The tool registry is PRODUCT (rows), not a plugin — siblings of approvals/run_checkpoint.
+	...specRegistrationSchema,
+	...registeredToolSchema,
+	...factsOverlaySchema,
 };
 
 /**

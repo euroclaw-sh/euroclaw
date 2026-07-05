@@ -5,6 +5,8 @@ export { createClawsStore } from "./claws";
 export { createEffectStore } from "./effect";
 export type { PiiMappingStoreOptions } from "./pii";
 export { createPiiMappingStore } from "./pii";
+export type { RegistryStores } from "./registry";
+export { createRegistryStores } from "./registry";
 export type { RunCheckpointStoreOptions } from "./run-checkpoint";
 export { createRunCheckpointStore } from "./run-checkpoint";
 export {

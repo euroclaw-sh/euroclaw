@@ -209,6 +209,7 @@ export type {
 	ModelRunner,
 	Outcome,
 	RunMode,
+	StampedFacts,
 	ToolBoundary,
 	ToolCall,
 	ToolRunner,
@@ -228,6 +229,7 @@ export {
 	RUN_ID_CONTEXT_KEY,
 	RUN_MODE_CONTEXT_KEY,
 	SUBJECT_CONTEXT_KEY,
+	stampedFacts,
 	TEAM_CONTEXT_KEY,
 	THREAD_ID_CONTEXT_KEY,
 	toolCall,
@@ -312,3 +314,36 @@ export type {
 	Where,
 	WhereOperator,
 } from "./storage";
+// ── tool registry: durable rows for uploaded tool surfaces (impls in storage/runtime) ──
+export type {
+	FactsOverlayRecord,
+	FactsOverlayUpsert,
+	RegisteredToolCreate,
+	RegisteredToolPatch,
+	RegisteredToolRecord,
+	SpecRegistrationRecord,
+	SpecRegistrationUpsert,
+} from "./tools/registry";
+export {
+	factsOverlayRecord,
+	factsOverlaySchema,
+	factsOverlayUpsert,
+	registeredToolCreate,
+	registeredToolPatch,
+	registeredToolRecord,
+	registeredToolSchema,
+	specRegistrationRecord,
+	specRegistrationSchema,
+	specRegistrationUpsert,
+} from "./tools/registry";
+export type {
+	FactsOverlayStore,
+	RegisteredToolStore,
+	SpecRegistrationStore,
+} from "./tools/registry-ports";
+// ── tool sources: what every extractor produces (types only; impls in @euroclaw/runtime) ──
+export type {
+	SourceDiagnostic,
+	SourceExtraction,
+	SourceTool,
+} from "./tools/source";

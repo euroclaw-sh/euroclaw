@@ -21,7 +21,9 @@ import type {
 	EngineRunRecord,
 	EngineStartRunInput,
 	EuroclawPlugin,
+	JsonObject,
 	MessageRecord,
+	RegisteredToolRecord,
 	ThreadRecord,
 	ToolCallRecord,
 	ToolCallStatusPatch,
@@ -47,6 +49,8 @@ import {
 	validationError,
 } from "@euroclaw/contracts";
 import {
+	createSpecRegistry,
+	REGISTER_OPENAPI_SPEC_ACTION,
 	type RunContext,
 	type Runtime,
 	type RuntimeConfig,
@@ -54,9 +58,12 @@ import {
 	type RuntimeRunOptions,
 	recordingFromRuntimeApprovalMetadata,
 	runtimeRunOptionsWithRecording,
+	type SpecRegistrationReport,
 } from "@euroclaw/runtime";
+import type { RegistryStores } from "@euroclaw/storage-durable";
 import { type as ark } from "arktype";
 import type { ClawRecordOf, CreateClawInputOf } from "./models";
+import { type ActionView, assembleOrgActions } from "./registry";
 
 export type ClawSendInput<Config extends RuntimeConfig = RuntimeConfig> = {
 	clawId: string;
@@ -100,6 +107,7 @@ export type ClawContext<Config extends RuntimeConfig = RuntimeConfig> = {
 	readonly engine?: ClawEngineHandle;
 	readonly runs?: ClawRunReadModel;
 	readonly plugins?: readonly EuroclawPlugin[];
+	readonly registry?: RegistryStores;
 };
 
 export type ClawApi<Config extends RuntimeConfig = RuntimeConfig> = {
@@ -184,6 +192,20 @@ export type ClawApi<Config extends RuntimeConfig = RuntimeConfig> = {
 	}) => Promise<ApprovalRecord[]>;
 
 	getEffect: (input: { id: string }) => ReturnType<EffectStore["get"]>;
+
+	// Tool registry (product): register an OpenAPI spec as governed tools, and read the assembled
+	// per-organization action vocabulary the policy router compiles against.
+	registerOpenApiSpec: (input: {
+		source: string;
+		document: JsonObject;
+		registeredBy: string;
+		organizationId: string;
+	}) => Promise<SpecRegistrationReport>;
+	listRegisteredTools: (input: {
+		organizationId: string;
+		source?: string;
+	}) => Promise<RegisteredToolRecord[]>;
+	listActions: (input: { organizationId: string }) => Promise<ActionView[]>;
 
 	startRun: (input: EngineStartRunInput) => Promise<EngineRunHandle>;
 	continueEngineRun: (
@@ -285,6 +307,17 @@ const continueEngineRunInput = ark({
 	"ctx?": jsonObjectOrUndefined,
 	"run?": engineRunMetadataOrUndefined,
 });
+const registerOpenApiSpecInput = ark({
+	document: jsonObject,
+	organizationId: "string",
+	registeredBy: "string",
+	source: "string",
+});
+const listRegisteredToolsInput = ark({
+	organizationId: "string",
+	"source?": "string | undefined",
+});
+const listActionsInput = ark({ organizationId: "string" });
 export const clawApiInputSchemas = {
 	bindConversation: bindConversationInput,
 	appendMessage: appendMessageInput,
@@ -310,11 +343,14 @@ export const clawApiInputSchemas = {
 	getToolCallByProviderId: runToolCallInput,
 	getToolResult: idInput,
 	grantApproval: grantApprovalInput,
+	listActions: listActionsInput,
 	listApprovals: listApprovalsInput,
 	listMessages: listMessagesInput,
+	listRegisteredTools: listRegisteredToolsInput,
 	listRunEvents: runIdInput,
 	listThreads: clawIdInput,
 	listToolResults: runToolCallInput,
+	registerOpenApiSpec: registerOpenApiSpecInput,
 	run: runInput,
 	sendMessage: sendMessageInput,
 	startRun: startRunInput,
@@ -404,6 +440,15 @@ function requireEffects(effects: EffectStore | undefined): EffectStore {
 	return effects;
 }
 
+function requireRegistry(registry: RegistryStores | undefined): RegistryStores {
+	if (!registry) {
+		throw configurationError("claw.api requires the tool registry stores", {
+			reason: "pass database to createClaw",
+		});
+	}
+	return registry;
+}
+
 function assertNoReservedContext(ctx: unknown): void {
 	if (ctx === undefined || ctx === null || typeof ctx !== "object") return;
 	for (const key of Object.keys(ctx)) {
@@ -461,6 +506,7 @@ export function createClawApi<Config extends RuntimeConfig>(input: {
 }): ClawApi<Config> {
 	const { context, newId } = input;
 	const store = () => requireClawsStore(context.clawsStore);
+	const registry = () => requireRegistry(context.registry);
 
 	const api = {
 		async bindConversation(args) {
@@ -614,6 +660,25 @@ export function createClawApi<Config extends RuntimeConfig>(input: {
 			context.runtime.approvals?.list(args) ?? Promise.resolve([]),
 
 		getEffect: ({ id }) => requireEffects(context.effects).get(id),
+
+		registerOpenApiSpec: (args) =>
+			createSpecRegistry(registry()).registerOpenApiSpec(args),
+		listRegisteredTools: ({ organizationId, source }) =>
+			source !== undefined
+				? registry().registeredTools.listBySource(organizationId, source)
+				: registry().registeredTools.listByOrganization(organizationId),
+		async listActions({ organizationId }) {
+			const stores = registry();
+			const [registeredTools, overlay] = await Promise.all([
+				stores.registeredTools.listByOrganization(organizationId),
+				stores.factsOverlay.listByOrganization(organizationId),
+			]);
+			return assembleOrgActions({
+				base: [REGISTER_OPENAPI_SPEC_ACTION],
+				registeredTools,
+				overlay,
+			}).actions;
+		},
 
 		startRun: (args) => {
 			assertNoReservedContext(args.ctx);

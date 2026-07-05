@@ -26,7 +26,7 @@ export type CedarSchemaOptions = {
 // are optional (stamped when resolution provides them). Per-action `args` appends when the
 // action's schema projects.
 const CONTEXT_FIELDS =
-	"confirmationUsed: Bool, clawId?: String, role?: String, runMode?: String, team?: String";
+	"confirmationUsed: Bool, clawId?: String, organizationId?: String, role?: String, runMode?: String, team?: String";
 
 function renderAction(
 	action: ActionDef,

@@ -12,7 +12,10 @@ export {
 	entitiesToCedarJson,
 	modelToCedarSchema,
 } from "./cedar";
+export type { FactsOverlayEntry } from "./overlay";
+export { actionInputsFromRegisteredTools, mergeFactsOverlay } from "./overlay";
 export type { PolicyPlugin, PolicyPluginConfig } from "./plugin";
 export { createPolicyPlugin } from "./plugin";
 export type { ArgsProjection, ProjectedShape } from "./projection";
 export { projectArgs, renderCedarType } from "./projection";
+export { createOrgPolicyRouter } from "./router";

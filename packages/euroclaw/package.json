@@ -27,6 +27,7 @@
 		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
+		"@euroclaw/authz": "workspace:*",
 		"@euroclaw/contracts": "workspace:*",
 		"@euroclaw/engine-sql": "workspace:*",
 		"@euroclaw/runtime": "workspace:*",
@@ -37,7 +38,6 @@
 		"kysely": "0.29.2"
 	},
 	"devDependencies": {
-		"@euroclaw/authz": "workspace:*",
 		"@euroclaw/core": "workspace:*",
 		"@euroclaw/policy-cedar": "workspace:*",
 		"@euroclaw/skills": "workspace:*",

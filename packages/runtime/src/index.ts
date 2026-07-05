@@ -47,5 +47,14 @@ export {
 } from "./runtime";
 export type { SubInvoke } from "./subinvoke";
 export { NESTED_APPROVAL_UNSUPPORTED, NESTED_INVOKER_TOOL } from "./subinvoke";
-export type { OpenApiExtraction, OpenApiTool } from "./tools";
-export { toolsFromOpenApi } from "./tools";
+export type {
+	OpenApiExtraction,
+	OpenApiTool,
+	SpecRegistrationReport,
+	SpecRegistry,
+} from "./tools";
+export {
+	createSpecRegistry,
+	REGISTER_OPENAPI_SPEC_ACTION,
+	toolsFromOpenApi,
+} from "./tools";

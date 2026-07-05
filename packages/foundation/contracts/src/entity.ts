@@ -322,6 +322,20 @@ function shapeFor(
 	return shape;
 }
 
+// Parsed values never carry present-but-undefined keys: optional fields admit `| undefined` for
+// caller ergonomics (flat literals — `description: maybeUndefined`), and this morph normalizes
+// them away, so stores can spread parsed values straight into rows (absent stays absent at the
+// adapter) instead of conditionally spreading field by field. Builds fresh — never mutates the
+// caller's object. Typed T → T so the pipe is TYPE-TRANSPARENT: it rides the entity bridge cast
+// below without widening it. The `as T` is sound because the morph runs on a VALIDATED value:
+// required props can't hold undefined (the validator rejected that), so only optional keys drop —
+// the result still satisfies T.
+function dropUndefined<T extends object>(value: T): T {
+	return Object.fromEntries(
+		Object.entries(value).filter(([, v]) => v !== undefined),
+	) as T;
+}
+
 export function entity<const Fields extends Record<string, EntityField>>(
 	name: string,
 	fields: Fields,
@@ -330,8 +344,11 @@ export function entity<const Fields extends Record<string, EntityField>>(
 	// `Record<string, unknown>`, so arktype can't recover the precise shape and `.infer` would be
 	// lossy. Re-annotate the (runtime-correct) validator to the field-derived record type, so every
 	// caller gets a precise `EntityRecord<Fields> | ArkErrors` from `record(x)` — no cast at the parse
-	// site. This single assertion is the one place that bridge lives.
-	const record = ark(shapeFor(fields)) as unknown as Type<EntityRecord<Fields>>;
+	// site. This single assertion is the one place that bridge lives (the dropUndefined pipe's type
+	// erasure is absorbed by the same annotation).
+	const record = ark(shapeFor(fields)).pipe(dropUndefined) as unknown as Type<
+		EntityRecord<Fields>
+	>;
 	// Project each DSL field onto the storage FieldAttribute — same type, but the projection strips
 	// the compile-time extras (kind/values/ark validators) so schema declarations stay serializable.
 	const storage = {
@@ -371,7 +388,7 @@ export function entity<const Fields extends Record<string, EntityField>>(
 			// Same bridge as `record` above: re-annotate the runtime-correct validator to the precise
 			// field-derived input type, so `schema(opts)(x)` yields `EntitySchemaInput<Fields, Options>
 			// | ArkErrors` with no cast at the parse site.
-			ark(shapeFor(fields, input)) as unknown as Type<
+			ark(shapeFor(fields, input)).pipe(dropUndefined) as unknown as Type<
 				EntitySchemaInput<Fields, Options>
 			>,
 		// The update-patch validator, derived from the fields' own `immutable`/`input` flags rather than a
@@ -381,8 +398,8 @@ export function entity<const Fields extends Record<string, EntityField>>(
 			const keys = Object.entries(fields)
 				.filter(([, field]) => !field.immutable && field.input !== false)
 				.map(([key]) => key);
-			return ark(
-				shapeFor(fields, { pick: keys, optional: keys }),
+			return ark(shapeFor(fields, { pick: keys, optional: keys })).pipe(
+				dropUndefined,
 			) as unknown as Type<EntityUpdateInput<Fields>>;
 		},
 	};

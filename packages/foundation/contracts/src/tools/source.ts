@@ -2,9 +2,11 @@
 // (OpenAPI today; MCP, GraphQL next), extraction emits governance-stamped tool definitions that
 // feed buildAuthzModel and the catalog identically, and reports every non-extracted operation.
 // Inputs are deliberately NOT contracted: sources differ there (a spec document, a live MCP
-// connection, an SDL string) — only the output shape is shared.
+// connection, an SDL string) — only the output shape is shared. Promoted from runtime to contracts
+// (slice 5): the tool registry stores these as rows, so a non-runtime tier now consumes the type.
 
-import type { JsonObject, ToolGovernance } from "@euroclaw/contracts";
+import type { JsonObject } from "../common";
+import type { ToolGovernance } from "../govern";
 
 /** One extracted tool: model-facing schema + authz facts + format-specific invocation binding. */
 export type SourceTool<Binding> = {
