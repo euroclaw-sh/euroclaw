@@ -83,5 +83,12 @@ export function modelFacingTools(tools: ToolSet): ToolSet {
 	) as ToolSet;
 }
 
+export type {
+	SpecRegistrationInput,
+	SpecRegistrationReport,
+	SpecRegistry,
+	SpecRegistryOptions,
+} from "./registry";
+export { createSpecRegistry, REGISTER_OPENAPI_SPEC_ACTION } from "./registry";
 export type { OpenApiExtraction, OpenApiTool } from "./sources/openapi";
 export { toolsFromOpenApi } from "./sources/openapi";
