@@ -48,12 +48,14 @@ export {
 export type { SubInvoke } from "./subinvoke";
 export { NESTED_APPROVAL_UNSUPPORTED, NESTED_INVOKER_TOOL } from "./subinvoke";
 export type {
+	EgressLookup,
 	InvokerResponse,
 	OpenApiExtraction,
 	OpenApiTool,
 	RegisteredToolContext,
 	RegisteredToolProvider,
 	RegisteredToolProviderOptions,
+	ResolvedAddress,
 	SpecRegistrationReport,
 	SpecRegistry,
 } from "./tools";

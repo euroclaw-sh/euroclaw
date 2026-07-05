@@ -83,6 +83,7 @@ export function modelFacingTools(tools: ToolSet): ToolSet {
 	) as ToolSet;
 }
 
+export type { EgressLookup, ResolvedAddress } from "./egress";
 export type {
 	InvokerResponse,
 	RegisteredToolContext,
