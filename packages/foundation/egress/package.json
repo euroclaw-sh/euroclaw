@@ -1,0 +1,40 @@
+{
+	"name": "@euroclaw/egress",
+	"version": "0.0.0",
+	"type": "module",
+	"description": "euroclaw's outbound egress safety floor: the non-negotiable network guard beneath any policy — SSRF range rejection (loopback / private / link-local / CGNAT / unspecified, IPv4+IPv6), https-only, and resolve-once address pinning. Node-free — the caller injects the DNS resolver.",
+	"license": "MIT",
+	"author": "Konstantin Ponomarev",
+	"homepage": "https://github.com/euroclaw-sh/euroclaw#readme",
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/euroclaw-sh/euroclaw.git",
+		"directory": "packages/foundation/egress"
+	},
+	"bugs": {
+		"url": "https://github.com/euroclaw-sh/euroclaw/issues"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js"
+		}
+	},
+	"main": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"files": [
+		"dist",
+		"README.md"
+	],
+	"scripts": {
+		"build": "rm -rf dist && tsc",
+		"test": "vitest run tests",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"@euroclaw/contracts": "workspace:*"
+	}
+}

@@ -142,6 +142,12 @@ importers:
         specifier: 2.2.0
         version: 2.2.0
 
+  packages/foundation/egress:
+    dependencies:
+      '@euroclaw/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/foundation/errors: {}
 
   packages/foundation/vendors:
@@ -290,6 +296,9 @@ importers:
       '@euroclaw/core':
         specifier: workspace:*
         version: link:../foundation/core
+      '@euroclaw/egress':
+        specifier: workspace:*
+        version: link:../foundation/egress
       '@euroclaw/storage-durable':
         specifier: workspace:*
         version: link:../storage/durable

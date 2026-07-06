@@ -25,6 +25,7 @@
 	"dependencies": {
 		"@euroclaw/contracts": "workspace:*",
 		"@euroclaw/core": "workspace:*",
+		"@euroclaw/egress": "workspace:*",
 		"@euroclaw/storage-durable": "workspace:*",
 		"@noble/hashes": "2.2.0",
 		"ai": "5.0.203",
