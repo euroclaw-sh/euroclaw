@@ -52,6 +52,8 @@ export type {
 	InvokerResponse,
 	OpenApiExtraction,
 	OpenApiTool,
+	PlanEgressInput,
+	PlanEgressResult,
 	RegisteredToolContext,
 	RegisteredToolProvider,
 	RegisteredToolProviderOptions,
@@ -63,6 +65,7 @@ export {
 	createRegisteredToolProvider,
 	createSpecRegistry,
 	normalizeOrigin,
+	planEgress,
 	REGISTER_OPENAPI_SPEC_ACTION,
 	toolsFromOpenApi,
 } from "./tools";

@@ -155,6 +155,18 @@ export {
 	effectStorageEntity,
 	effectStorageFields,
 } from "./effects";
+// ── sandbox egress: the enforcement port (compiler in @euroclaw/runtime, adapters in plugins) ──
+export type {
+	EgressCapability,
+	EgressPlan,
+	EgressTransport,
+	GovernedOutbound,
+	GovernedSocket,
+	OutboundRequest,
+	OutboundResponse,
+	SandboxEgressAdapter,
+	UnenforcedNote,
+} from "./egress/port";
 // ── the engine protocol: engine-neutral durable execution (impls in @euroclaw/engine-*) ──────
 export type {
 	ClawEngineFactory,
