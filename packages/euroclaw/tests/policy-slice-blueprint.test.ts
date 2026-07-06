@@ -59,6 +59,7 @@ function setup() {
 		registeredTools: [],
 	}).model;
 	const divergences: ShadowDivergence[] = [];
+	const candidateBuildErrors: unknown[] = [];
 	const ran: string[] = [];
 	let builds = 0;
 
@@ -79,10 +80,14 @@ function setup() {
 			const live = compile(model, bundle.live);
 			// A candidate set exists ONLY when shadow slices do — then wrap two engines, else use live.
 			if (!bundle.shadow) return live;
+			const shadow = bundle.shadow;
 			return createShadowPolicyEngine({
 				live,
-				candidate: compile(model, bundle.shadow),
+				// Lazy: a malformed shadow slice throws HERE, inside the wrapper's try/catch — it
+				// disables shadow and serves live, never breaking the org's live authorization.
+				candidate: () => compile(model, shadow),
 				observe: (d) => divergences.push(d),
+				onCandidateBuildError: (e) => candidateBuildErrors.push(e),
 			});
 		},
 	});
@@ -102,16 +107,18 @@ function setup() {
 		};
 	};
 
+	// "absent" = do NOT stamp runMode — the PRODUCTION reality (nothing stamps euroclaw__runMode yet),
+	// which the floor must fail closed against.
 	const coreFor = (
 		organizationId: string,
-		runMode: "interactive" | "autonomous" = "interactive",
+		runMode: "interactive" | "autonomous" | "absent" = "interactive",
 	) =>
 		createGovernance({
 			plugins: [createPolicyPlugin({ engine: router, mapCall })],
 			resolveContext: (ctx) => ({
 				...ctx,
 				[ORGANIZATION_CONTEXT_KEY]: organizationId,
-				[RUN_MODE_CONTEXT_KEY]: runMode,
+				...(runMode !== "absent" ? { [RUN_MODE_CONTEXT_KEY]: runMode } : {}),
 			}),
 			runTool: (call) => {
 				ran.push(call.name);
@@ -122,14 +129,22 @@ function setup() {
 	const call = (
 		org: string,
 		name: string,
-		runMode?: "interactive" | "autonomous",
+		runMode?: "interactive" | "autonomous" | "absent",
 	) =>
 		coreFor(org, runMode).handleToolCall(
 			{ name, args: {} },
 			{ principal: "alice" },
 		);
 
-	return { stores, coreFor, call, divergences, ran, getBuilds: () => builds };
+	return {
+		stores,
+		coreFor,
+		call,
+		divergences,
+		candidateBuildErrors,
+		ran,
+		getBuilds: () => builds,
+	};
 }
 
 describe("policy-slice blueprint (composed slice 6b)", () => {
@@ -252,9 +267,12 @@ describe("policy-slice blueprint (composed slice 6b)", () => {
 		expect(ran).not.toContain("readDoc"); // the tool NEVER ran — fail-closed, not fail-open
 	});
 
-	it("the system floor cannot be removed by a customer permit (deny wins)", async () => {
+	it("the system floor cannot be removed by a customer permit — needs-approval in ANY run mode", async () => {
 		const { call, stores } = setup();
-		// A customer slice that tries to permit writes outright — laid over the sealed posture.
+		// A customer slice that tries to permit writes outright — laid over the sealed posture. The
+		// confirmation-only floor forbids every unconfirmed write; the probe turns it into a human gate.
+		// This holds for interactive, autonomous, AND absent runMode — the last being the PRODUCTION
+		// reality (nothing stamps euroclaw__runMode), the fail-open escalation this fix closes.
 		await stores.policySlices.upsert({
 			organizationId: "org-floor",
 			name: "escalate",
@@ -262,15 +280,28 @@ describe("policy-slice blueprint (composed slice 6b)", () => {
 			mode: "enforce",
 			updatedBy: "admin",
 		});
-		// interactive: the permit applies (the autonomous forbid does not) → the write runs.
-		expect((await call("org-floor", "writeDoc", "interactive")).status).toBe(
-			"ok",
-		);
-		// autonomous + unconfirmed: the floor forbids; confirming would unblock → needs-approval,
-		// NEVER a silent ok. The customer's permit could not escalate past the floor.
-		expect((await call("org-floor", "writeDoc", "autonomous")).status).toBe(
-			"needs-approval",
-		);
+		for (const runMode of ["interactive", "autonomous", "absent"] as const) {
+			expect((await call("org-floor", "writeDoc", runMode)).status).toBe(
+				"needs-approval", // NEVER a silent "ok" — the customer permit cannot escalate the floor
+			);
+		}
+	});
+
+	it("a malformed shadow slice does NOT break the org's live authorization", async () => {
+		const { call, stores, ran, candidateBuildErrors } = setup();
+		// A "safe to experiment with" shadow slice with a Cedar typo — its candidate set fails to
+		// build. Live authz must be unaffected (reads still run); the build error is surfaced.
+		await stores.policySlices.upsert({
+			organizationId: "org-badshadow",
+			name: "typo",
+			cedar: `this is not valid cedar`,
+			mode: "shadow",
+			updatedBy: "admin",
+		});
+		const before = ran.length;
+		expect((await call("org-badshadow", "readDoc")).status).toBe("ok"); // live survives
+		expect(ran.length).toBe(before + 1);
+		expect(candidateBuildErrors.length).toBeGreaterThan(0); // surfaced, not silent
 	});
 });
 

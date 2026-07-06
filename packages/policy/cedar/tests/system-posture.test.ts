@@ -52,18 +52,21 @@ describe("SYSTEM_POSTURE through cedar", () => {
 		expect(result.decision).toBe("needs-approval");
 	});
 
-	it("the autonomous floor: an unconditional customer permit still can't run an autonomous write", async () => {
-		// A customer slice that tries to permit writes outright, laid over the sealed posture.
+	it("an unconditional customer permit still can't run an UNCONFIRMED write — any run mode", async () => {
+		// A customer slice that tries to permit writes outright, laid over the sealed posture. The
+		// confirmation-only floor forbids every unconfirmed write regardless of mode; confirming would
+		// unblock it → needs-approval, NEVER a silent ok. Crucially this holds even with runMode ABSENT
+		// (the production reality — nothing stamps euroclaw__runMode), the fail-open escalation case.
 		const withPermit = `${SYSTEM_POSTURE}\npermit(principal, action in Action::"writes", resource);`;
 		const e = engine(withPermit);
-		// interactive: the customer permit applies (the autonomous forbid does not) → runs
-		expect(
-			(await e.authorize(req("writeDoc", { runMode: "interactive" }))).decision,
-		).toBe("permit");
-		// autonomous + unconfirmed: the floor's forbid overrides the permit; confirming would unblock
-		// it → needs-approval, NEVER a silent ok. The floor cannot be escalated past.
-		expect(
-			(await e.authorize(req("writeDoc", { runMode: "autonomous" }))).decision,
-		).toBe("needs-approval");
+		for (const context of [
+			{ runMode: "interactive" },
+			{ runMode: "autonomous" },
+			{}, // runMode ABSENT — production
+		]) {
+			expect((await e.authorize(req("writeDoc", context))).decision).toBe(
+				"needs-approval",
+			);
+		}
 	});
 });
