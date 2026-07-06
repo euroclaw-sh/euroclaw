@@ -8,9 +8,9 @@ import { describe, expect, it } from "vitest";
 import {
 	applyCredentials,
 	type CredentialContext,
-	type HttpRequestPlan,
-	type OpenApiBinding,
-} from "../src/tools/sources/openapi";
+} from "../src/tools/invoke/credentials";
+import type { HttpRequestPlan } from "../src/tools/invoke/request-plan";
+import type { OpenApiBinding } from "../src/tools/sources/openapi";
 
 const CTX: CredentialContext = { organizationId: "org-a", source: "petstore" };
 

@@ -1,7 +1,10 @@
 import type { JsonObject } from "@euroclaw/contracts";
 import { describe, expect, it } from "vitest";
+import {
+	normalizeOrigin,
+	planHttpRequest,
+} from "../src/tools/invoke/request-plan";
 import type { OpenApiBinding } from "../src/tools/sources/openapi";
-import { normalizeOrigin, planHttpRequest } from "../src/tools/sources/openapi";
 
 function binding(overrides: Partial<OpenApiBinding>): OpenApiBinding {
 	return {

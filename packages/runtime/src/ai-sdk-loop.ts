@@ -4,12 +4,12 @@ import type { ModelMessage, ToolSet } from "ai";
 import { generateText, stepCountIs, wrapLanguageModel } from "ai";
 import type { RuntimeEventPayloadInput } from "./events";
 import { modelMiddleware } from "./model-middleware";
+import { abortIfNeeded, type RunState } from "./run-state";
 import type {
 	RuntimeAbortSignal,
 	RuntimeModel,
 	RuntimeResult,
 } from "./runtime";
-import type { RunState } from "./tools";
 
 export type AiSdkLoopInput = {
 	model: RuntimeModel;
@@ -35,10 +35,6 @@ export type AiSdkLoopInput = {
 	emitEvent?: (payload: RuntimeEventPayloadInput) => Promise<void>;
 	redactEventValue?: <T>(value: T) => Promise<T>;
 };
-
-function abortIfNeeded(signal: RuntimeAbortSignal | undefined): void {
-	if (signal?.aborted) throw stateError("runtime aborted");
-}
 
 export function toolResultMessage(
 	toolCallId: string,

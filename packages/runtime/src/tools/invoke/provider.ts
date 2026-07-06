@@ -31,13 +31,10 @@ import {
 } from "@euroclaw/contracts";
 import { jsonSchema, type ToolSet } from "ai";
 import { type } from "arktype";
+import { type OpenApiBinding, openApiBinding } from "../sources/openapi";
+import { applyCredentials } from "./credentials";
 import { assertEgressAllowed, type EgressLookup } from "./egress";
-import {
-	applyCredentials,
-	type OpenApiBinding,
-	openApiBinding,
-	planHttpRequest,
-} from "./sources/openapi";
+import { planHttpRequest } from "./request-plan";
 
 /** The per-run turn context the provider closes each tool over. NONE of it comes from model args or
  *  the AI-SDK execute options (which carry no turn context) — it is the run's trusted org + actor. */

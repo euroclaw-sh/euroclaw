@@ -2,8 +2,8 @@ import type { JsonObject } from "@euroclaw/contracts";
 import { redactionContextFrom, stateError } from "@euroclaw/contracts";
 import type { Governance } from "@euroclaw/core";
 import type { LanguageModelMiddleware } from "ai";
+import type { RunState } from "./run-state";
 import type { RuntimeModel } from "./runtime";
-import type { RunState } from "./tools";
 
 /** AI SDK middleware for the model boundary: redact prompt before provider egress, then run core model boundary. */
 export function modelMiddleware(

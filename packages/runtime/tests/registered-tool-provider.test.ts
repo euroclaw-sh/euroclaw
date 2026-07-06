@@ -5,11 +5,11 @@ import type {
 } from "@euroclaw/contracts";
 import { describe, expect, it } from "vitest";
 import { modelFacingTools } from "../src/tools";
-import type { EgressLookup } from "../src/tools/egress";
+import type { EgressLookup } from "../src/tools/invoke/egress";
 import {
 	createRegisteredToolProvider,
 	type InvokerResponse,
-} from "../src/tools/registered-tool-provider";
+} from "../src/tools/invoke/provider";
 
 const publicLookup: EgressLookup = async () => [
 	{ address: "93.184.216.34", family: 4 },

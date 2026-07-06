@@ -3,7 +3,7 @@ import {
 	assertEgressAllowed,
 	blockedAddressReason,
 	type EgressLookup,
-} from "../src/tools/egress";
+} from "../src/tools/invoke/egress";
 
 /** A fake resolver returning fixed addresses — no real DNS in tests. */
 const lookupReturning =

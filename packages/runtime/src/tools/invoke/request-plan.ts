@@ -9,7 +9,10 @@
 
 import type { JsonObject, JsonValue } from "@euroclaw/contracts";
 import { configurationError } from "@euroclaw/contracts";
-import type { OpenApiBinding, OpenApiParameterBinding } from "./contracts";
+import type {
+	OpenApiBinding,
+	OpenApiParameterBinding,
+} from "../sources/openapi/binding";
 
 export type HttpRequestPlan = {
 	method: string;

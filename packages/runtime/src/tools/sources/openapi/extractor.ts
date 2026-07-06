@@ -34,7 +34,7 @@ import {
 	openApiRequestBody,
 	openApiSecurityRequirement,
 	openApiServer,
-} from "./contracts";
+} from "./binding";
 
 const READ_METHODS = new Set<OpenApiMethod>(["get", "head"]);
 const VERB_GROUPS: Partial<Record<OpenApiMethod, string>> = {

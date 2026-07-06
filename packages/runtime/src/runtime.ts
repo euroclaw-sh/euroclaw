@@ -53,18 +53,13 @@ import {
 	type RuntimeRecordingContext,
 	runtimeRecordingContext,
 } from "./events";
+import { abortIfNeeded, createRunState, type RunState } from "./run-state";
 import {
 	NESTED_APPROVAL_UNSUPPORTED,
 	NESTED_INVOKER_TOOL,
 	type SubInvoke,
 } from "./subinvoke";
-import {
-	createRunState,
-	modelFacingTools,
-	type RunState,
-	registerToolGates,
-	toolGovernance,
-} from "./tools";
+import { modelFacingTools, registerToolGates, toolGovernance } from "./tools";
 
 export type RuntimeModel = Parameters<typeof wrapLanguageModel>[0]["model"];
 
@@ -251,10 +246,6 @@ function effectOutputMode(
 	return (
 		policy?.output ?? (policy?.idempotency === "none" ? "none" : "redacted")
 	);
-}
-
-function abortIfNeeded(signal: RuntimeAbortSignal | undefined): void {
-	if (signal?.aborted) throw stateError("runtime aborted");
 }
 
 function combinedAbortSignal(

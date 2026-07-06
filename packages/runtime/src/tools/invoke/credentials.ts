@@ -14,7 +14,10 @@ import type {
 	SecretResolver,
 } from "@euroclaw/contracts";
 import { configurationError } from "@euroclaw/contracts";
-import type { OpenApiAuthScheme, OpenApiBinding } from "./contracts";
+import type {
+	OpenApiAuthScheme,
+	OpenApiBinding,
+} from "../sources/openapi/binding";
 import type { HttpRequestPlan } from "./request-plan";
 
 /** The trusted keying context for credential resolution — the turn's org + actor, plus the row's
