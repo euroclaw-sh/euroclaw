@@ -7,6 +7,7 @@ import type {
 	JsonObject,
 	JsonValue,
 	Redactor,
+	RunMode,
 	ToolEffectPolicy,
 } from "@euroclaw/contracts";
 import {
@@ -16,6 +17,7 @@ import {
 	jsonValue as jsonValueSchema,
 	RESERVED_CONTEXT_PREFIX,
 	RUN_ID_CONTEXT_KEY,
+	RUN_MODE_CONTEXT_KEY,
 	redactionContextFrom,
 	stateError,
 	THREAD_ID_CONTEXT_KEY,
@@ -74,6 +76,11 @@ export type RuntimeRunOptions = {
 	 * database-backed run checkpoint store.
 	 */
 	deadlineAt?: string;
+	/** How this run was triggered — set by the ENTRY POINT (euroclaw's sendMessage/continueRun stamp
+	 *  "interactive"; the engine worker and direct calls leave it unset). Stamped into every gated
+	 *  call as the spoof-proof `euroclaw__runMode` fact. Default "autonomous" — fail-closed, so an
+	 *  unattended run can't silently satisfy a write policy that a human presence would gate. */
+	runMode?: RunMode;
 	readonly [RUNTIME_RECORDING_OPTION]?: RuntimeRecordingContext;
 };
 
@@ -526,6 +533,8 @@ export function createRuntime<const Config extends RuntimeConfig>(
 			ctx: Record<string, unknown>,
 		): Promise<Record<string, unknown>> => {
 			const resolved = resolveContext ? await resolveContext(ctx) : ctx;
+			// Runtime-stamped, spoof-proof facts (the caller's euroclaw__ keys were already stripped).
+			resolved[RUN_MODE_CONTEXT_KEY] = state.runMode;
 			if (state.recording) {
 				resolved[CLAW_ID_CONTEXT_KEY] = state.recording.clawId;
 				resolved[THREAD_ID_CONTEXT_KEY] = state.recording.threadId;
@@ -833,6 +842,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		const state = createRunState();
 		state.runInstanceId = newId("runstate");
 		state.abortSignal = options?.abortSignal;
+		state.runMode = options?.runMode ?? "autonomous";
 		abortIfNeeded(options?.abortSignal);
 		assertYieldable(options);
 		const recording = options?.[RUNTIME_RECORDING_OPTION];
@@ -931,6 +941,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		const state = createRunState();
 		state.runInstanceId = `approval:${id}`;
 		state.abortSignal = options?.abortSignal;
+		state.runMode = options?.runMode ?? "autonomous";
 		state.recording = effectiveRecording;
 		state.runId = options?.runId;
 		state.currentToolCallId = checkpoint.toolCallId;
@@ -1004,6 +1015,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		const resumeState = createRunState();
 		resumeState.runInstanceId = `${state.runInstanceId}:resume`;
 		resumeState.abortSignal = options?.abortSignal;
+		resumeState.runMode = options?.runMode ?? "autonomous";
 		resumeState.recording = effectiveRecording;
 		resumeState.runId = options?.runId;
 		const result = await runAiSdkLoop({
@@ -1062,6 +1074,7 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		const state = createRunState();
 		state.runInstanceId = `checkpoint:${checkpointId}`;
 		state.abortSignal = options?.abortSignal;
+		state.runMode = options?.runMode ?? "autonomous";
 		state.recording = recording;
 		state.runId = runId;
 

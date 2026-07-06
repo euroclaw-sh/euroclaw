@@ -637,12 +637,16 @@ export function createClawApi<Config extends RuntimeConfig>(input: {
 			const result = await context.runtime.run(
 				args.message,
 				args.ctx as never,
-				runtimeRunOptionsWithRecording(undefined, {
-					clawId: args.clawId,
-					runId,
-					threadId: args.threadId,
-					userMessageId: userMessage.id,
-				}),
+				// A conversational message is a human at the other end → interactive.
+				runtimeRunOptionsWithRecording(
+					{ runMode: "interactive" },
+					{
+						clawId: args.clawId,
+						runId,
+						threadId: args.threadId,
+						userMessageId: userMessage.id,
+					},
+				),
 			);
 			return { result, userMessage };
 		},
@@ -671,13 +675,22 @@ export function createClawApi<Config extends RuntimeConfig>(input: {
 			const recording = approval
 				? recordingFromRuntimeApprovalMetadata(approval.metadata)
 				: undefined;
+			// A human just granted the approval → interactive (a caller may override explicitly).
+			const continueOptions = {
+				...options,
+				runMode: options?.runMode ?? "interactive",
+			} as const;
 			if (!recording) {
-				return context.runtime.continueRun(approvalId, ctx as never, options);
+				return context.runtime.continueRun(
+					approvalId,
+					ctx as never,
+					continueOptions,
+				);
 			}
 			return context.runtime.continueRun(
 				approvalId,
 				ctx as never,
-				runtimeRunOptionsWithRecording(options, recording),
+				runtimeRunOptionsWithRecording(continueOptions, recording),
 			);
 		},
 

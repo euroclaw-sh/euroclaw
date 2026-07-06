@@ -3,6 +3,7 @@
 // machinery: keeping it in the tools barrel forced tools/ to reach upward into ../events and
 // ../runtime and mixed loop concerns into the tool subsystem's public surface.
 
+import type { RunMode } from "@euroclaw/contracts";
 import { stateError } from "@euroclaw/contracts";
 import type { ModelMessage } from "ai";
 import type { RuntimeRecordingContext } from "./events";
@@ -19,6 +20,10 @@ export type RunState = {
 	runInstanceId?: string;
 	/** Durable run identity (engine run id) — stable across attempts and yield slices. */
 	runId?: string;
+	/** How this run was triggered — stamped into every gated call's context as `euroclaw__runMode`
+	 *  (spoof-proof: the runtime sets it from the ENTRY POINT, never the model/caller). Defaults to
+	 *  "autonomous" (fail-closed: an unattended run must not silently pass write policies). */
+	runMode: RunMode;
 	currentModelRunner?: () => unknown | Promise<unknown>;
 	recording?: RuntimeRecordingContext;
 	abortSignal?: RuntimeAbortSignal;
@@ -31,6 +36,7 @@ export function createRunState(): RunState {
 		currentToolInput: undefined,
 		currentMessages: [],
 		currentStep: 0,
+		runMode: "autonomous",
 	};
 }
 

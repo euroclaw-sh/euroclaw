@@ -126,6 +126,10 @@ export function cedar(config: CedarPluginConfig): PolicyPlugin<CedarContext> {
 					...args,
 					[approvalFlag]: false,
 					...facts,
+					// runMode is ALWAYS stamped (default autonomous) so policies can reference
+					// context.runMode without the missing-attribute error cedar-wasm raises on an
+					// absent optional — an unknown mode reads as autonomous, the fail-closed default.
+					runMode: facts.runMode ?? "autonomous",
 					...(server !== undefined ? { server } : {}),
 				},
 			};

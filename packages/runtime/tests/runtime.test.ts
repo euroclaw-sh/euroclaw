@@ -1,4 +1,10 @@
-import type { Detector, EffectStore, PiiSpan } from "@euroclaw/contracts";
+import type {
+	Detector,
+	EffectStore,
+	EuroclawPlugin,
+	PiiSpan,
+} from "@euroclaw/contracts";
+import { RUN_MODE_CONTEXT_KEY } from "@euroclaw/contracts";
 import {
 	createMemoryAudit,
 	createMemoryRedactor,
@@ -841,5 +847,42 @@ describe("@euroclaw/runtime", () => {
 			/completed effect output is unavailable/,
 		);
 		expect(toolRuns).toBe(1);
+	});
+
+	it("stamps runMode into the gate context — interactive from options, autonomous by default", async () => {
+		const seen: unknown[] = [];
+		// A gate observes the resolved context — it sees the runtime-stamped euroclaw__runMode.
+		const capture: EuroclawPlugin = {
+			id: "capture-runmode",
+			gates: [
+				{
+					id: "capture",
+					matcher: (call) => call.name === "send_email",
+					handler: (_call, ctx) => {
+						seen.push(ctx[RUN_MODE_CONTEXT_KEY]);
+						return { decision: "permit" };
+					},
+				},
+			],
+		};
+		const makeRuntime = () =>
+			createRuntime({
+				model: scriptedModel({ prompt: "" }),
+				plugins: [capture],
+				tools: {
+					send_email: tool({
+						description: "Send an email.",
+						inputSchema: jsonSchema<{ to: string }>({
+							type: "object",
+							properties: { to: { type: "string" } },
+							required: ["to"],
+						}),
+						execute: async () => ({ sent: true }),
+					}),
+				},
+			});
+		await makeRuntime().run("do it", undefined, { runMode: "interactive" });
+		await makeRuntime().run("do it"); // no runMode → fail-closed default
+		expect(seen).toEqual(["interactive", "autonomous"]);
 	});
 });

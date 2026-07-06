@@ -52,21 +52,19 @@ describe("SYSTEM_POSTURE through cedar", () => {
 		expect(result.decision).toBe("needs-approval");
 	});
 
-	it("an unconditional customer permit still can't run an UNCONFIRMED write — any run mode", async () => {
-		// A customer slice that tries to permit writes outright, laid over the sealed posture. The
-		// confirmation-only floor forbids every unconfirmed write regardless of mode; confirming would
-		// unblock it → needs-approval, NEVER a silent ok. Crucially this holds even with runMode ABSENT
-		// (the production reality — nothing stamps euroclaw__runMode), the fail-open escalation case.
+	it("a customer permit relaxes a known-interactive write but not an autonomous one", async () => {
+		// A customer slice permits writes outright, laid over the sealed posture. runMode is stamped
+		// on every real request (runtime + mapCall guarantee it is present, default autonomous), so the
+		// floor conditions on it directly: interactive relaxes, autonomous/unknown stays gated.
 		const withPermit = `${SYSTEM_POSTURE}\npermit(principal, action in Action::"writes", resource);`;
 		const e = engine(withPermit);
-		for (const context of [
-			{ runMode: "interactive" },
-			{ runMode: "autonomous" },
-			{}, // runMode ABSENT — production
-		]) {
-			expect((await e.authorize(req("writeDoc", context))).decision).toBe(
-				"needs-approval",
-			);
-		}
+		// interactive: a human is present → the customer permit applies → the write runs.
+		expect(
+			(await e.authorize(req("writeDoc", { runMode: "interactive" }))).decision,
+		).toBe("permit");
+		// autonomous: no human → the floor forbids; confirming would unblock → needs-approval, never ok.
+		expect(
+			(await e.authorize(req("writeDoc", { runMode: "autonomous" }))).decision,
+		).toBe("needs-approval");
 	});
 });

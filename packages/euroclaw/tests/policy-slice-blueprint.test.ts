@@ -102,7 +102,8 @@ function setup() {
 			context: {
 				confirmationUsed: false,
 				...(typeof organizationId === "string" ? { organizationId } : {}),
-				...(typeof runMode === "string" ? { runMode } : {}),
+				// Always present (default autonomous) — mirrors the real cedar() mapCall.
+				runMode: typeof runMode === "string" ? runMode : "autonomous",
 			},
 		};
 	};
@@ -267,12 +268,9 @@ describe("policy-slice blueprint (composed slice 6b)", () => {
 		expect(ran).not.toContain("readDoc"); // the tool NEVER ran — fail-closed, not fail-open
 	});
 
-	it("the system floor cannot be removed by a customer permit — needs-approval in ANY run mode", async () => {
+	it("the floor relaxes for a KNOWN-interactive write but gates autonomous/unknown", async () => {
 		const { call, stores } = setup();
-		// A customer slice that tries to permit writes outright — laid over the sealed posture. The
-		// confirmation-only floor forbids every unconfirmed write; the probe turns it into a human gate.
-		// This holds for interactive, autonomous, AND absent runMode — the last being the PRODUCTION
-		// reality (nothing stamps euroclaw__runMode), the fail-open escalation this fix closes.
+		// A customer slice permits writes outright, laid over the sealed posture.
 		await stores.policySlices.upsert({
 			organizationId: "org-floor",
 			name: "escalate",
@@ -280,11 +278,19 @@ describe("policy-slice blueprint (composed slice 6b)", () => {
 			mode: "enforce",
 			updatedBy: "admin",
 		});
-		for (const runMode of ["interactive", "autonomous", "absent"] as const) {
-			expect((await call("org-floor", "writeDoc", runMode)).status).toBe(
-				"needs-approval", // NEVER a silent "ok" — the customer permit cannot escalate the floor
-			);
-		}
+		// interactive: a human is present → the customer permit relaxes the floor → the write runs.
+		expect((await call("org-floor", "writeDoc", "interactive")).status).toBe(
+			"ok",
+		);
+		// autonomous: no human → the floor forbids; confirming would unblock → needs-approval.
+		expect((await call("org-floor", "writeDoc", "autonomous")).status).toBe(
+			"needs-approval",
+		);
+		// absent runMode → the mapCall defaults it to autonomous → still gated (fail-closed), NEVER a
+		// silent "ok". The customer permit cannot escalate an unattended write.
+		expect((await call("org-floor", "writeDoc", "absent")).status).toBe(
+			"needs-approval",
+		);
 	});
 
 	it("a malformed shadow slice does NOT break the org's live authorization", async () => {
