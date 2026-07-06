@@ -25,10 +25,14 @@ export type HttpRequestPlan = {
 	origin: string;
 };
 
-/** The canonical origin of a server URL — scheme + host (default ports dropped, host lowercased).
- *  The SAME normalization the floor validates and the `context.server` policy fact carries, so the
- *  three never disagree. Throws when the server is absent/unparseable — an uninvokable tool. */
-export function normalizeOrigin(server: string | undefined): string {
+/** Parse a server URL into its canonical origin (scheme + host, default ports dropped, host
+ *  lowercased) and base path — the ONE guard + parse both `normalizeOrigin` and `planHttpRequest`
+ *  share, so the origin the floor validates, the `context.server` policy fact, and the request
+ *  target can never disagree. Throws when the server is absent/unparseable — an uninvokable tool. */
+function parseServer(server: string | undefined): {
+	origin: string;
+	basePath: string;
+} {
 	if (server === undefined || server === "") {
 		throw configurationError(
 			"registered tool has no server — uninvokable (re-register the spec with a servers entry)",
@@ -42,7 +46,15 @@ export function normalizeOrigin(server: string | undefined): string {
 			server,
 		});
 	}
-	return `${parsed.protocol}//${parsed.host}`;
+	// The server URL may carry a base path (https://api.x/v1); the operation path appends to it.
+	const basePath =
+		parsed.pathname === "/" ? "" : parsed.pathname.replace(/\/+$/, "");
+	return { origin: `${parsed.protocol}//${parsed.host}`, basePath };
+}
+
+/** The canonical origin of a server URL (default ports dropped, host lowercased). */
+export function normalizeOrigin(server: string | undefined): string {
+	return parseServer(server).origin;
 }
 
 /** Turn a validated binding + flat args into a concrete HTTP request description. Pure. */
@@ -50,23 +62,7 @@ export function planHttpRequest(
 	binding: OpenApiBinding,
 	args: JsonObject,
 ): HttpRequestPlan {
-	if (binding.server === undefined || binding.server === "") {
-		throw configurationError(
-			"registered tool has no server — uninvokable (re-register the spec with a servers entry)",
-		);
-	}
-	let serverUrl: URL;
-	try {
-		serverUrl = new URL(binding.server);
-	} catch {
-		throw configurationError("registered tool server is not a valid URL", {
-			server: binding.server,
-		});
-	}
-	const origin = `${serverUrl.protocol}//${serverUrl.host}`;
-	// The server URL may carry a base path (https://api.x/v1); the operation path appends to it.
-	const basePath =
-		serverUrl.pathname === "/" ? "" : serverUrl.pathname.replace(/\/+$/, "");
+	const { origin, basePath } = parseServer(binding.server);
 
 	const byName = new Map<string, OpenApiParameterBinding>();
 	for (const parameter of binding.parameters)

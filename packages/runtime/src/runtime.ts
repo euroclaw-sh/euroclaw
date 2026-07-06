@@ -766,7 +766,10 @@ export function createRuntime<const Config extends RuntimeConfig>(
 				},
 				now,
 			});
-			registerToolGates(built, tools);
+			// runTools, NOT the static `tools`: the nested core executes from runTools (above), so a
+			// per-run registered tool's gate must register here too — otherwise a gated registered
+			// tool reached via subInvoke would run ungated on the nested core.
+			registerToolGates(built, runTools);
 			nested = built;
 			return nested;
 		};
@@ -774,8 +777,9 @@ export function createRuntime<const Config extends RuntimeConfig>(
 		const subInvoke: SubInvoke = async (name, args, ctx) => {
 			// Recursion guard: an invoker-stamped tool cannot be reached from a nested call.
 			// Nested tools never receive a `subInvoke`, so letting one through would only fail
-			// deeper with a worse error — fail closed at the door.
-			const target = tools[name];
+			// deeper with a worse error — fail closed at the door. runTools (not the static `tools`)
+			// so a per-run registered invoker tool is guarded too.
+			const target = runTools[name];
 			if (target && toolGovernance(target, name)?.invoker === true) {
 				return {
 					status: "denied",

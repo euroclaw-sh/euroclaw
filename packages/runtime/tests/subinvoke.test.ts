@@ -394,4 +394,39 @@ describe("@euroclaw/runtime subInvoke", () => {
 			gateId: "tool:send_email",
 		});
 	});
+
+	it("applies a govern() gate to a nested call on a PER-RUN (resolveTools) tool", async () => {
+		// Regression: the nested core must register gates from the RESOLVED tool set it executes
+		// from (runTools), not the static `tools`. A gated tool supplied per-run via resolveTools
+		// and reached through subInvoke would otherwise run UNGATED on the nested core — a gate
+		// bypass. Distinguished from the test above by placing the gated tool in resolveTools.
+		let nested: HandleResult | undefined;
+		const runtime = createRuntime({
+			model: callToolOnceModel("run_code", {}),
+			tools: {
+				run_code: invokerTool(async (subInvoke) => {
+					nested = await subInvoke("send_email", { to: "a@x.com" });
+					return { handled: true };
+				}),
+			},
+			resolveTools: () => ({
+				send_email: govern(
+					tool({
+						description: "Send an email.",
+						inputSchema: emailInputSchema,
+						execute: async () => ({ sent: true }),
+					}),
+					{ gate: () => ({ decision: "deny", reason: "per-tool deny" }) },
+				),
+			}),
+		});
+
+		const result = await runtime.run("do it");
+
+		expect(result.status).toBe("completed");
+		expect(nested).toMatchObject({
+			status: "denied",
+			gateId: "tool:send_email",
+		});
+	});
 });
