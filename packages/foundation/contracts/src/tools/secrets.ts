@@ -44,3 +44,41 @@ export type SecretMaterial =
 export type SecretResolver = (
 	request: SecretRequest,
 ) => SecretMaterial | null | Promise<SecretMaterial | null>;
+
+// ── The one-door resolver — `secrets.get(name)` (docs/plans/secrets-provider-registry.md) ────────
+//
+// The evolution of the port above from `(source, scheme)` keying to a single canonical NAME every
+// subsystem resolves through — the tool invoker, sandbox egress, AND channels — so an org's alias is
+// respected once, not remembered per-subsystem. euroclaw stores NO secret values: a `SecretProvider`
+// resolves each on demand from where it actually lives (env / vault / SSM …). These are plain-TS
+// ports (behaviour, not boundary data — no schema); the providers + resolver live in @euroclaw/secrets.
+
+/** Context a resolution may narrow on — the org whose binding to use, the acting principal for a
+ *  per-user credential. Optional and extensible on purpose: a new fact must never be a breaking
+ *  signature change. */
+export type ResolveContext = { organizationId?: string; actor?: string };
+
+/** A secret backend (Executor's `CredentialProvider`): where values actually live. euroclaw lists
+ *  these as deployment infra and resolves through them — it never holds the value itself. */
+export type SecretProvider = {
+	/** The provider KEY — what a connection references and an audit records. The factory defaults it
+	 *  (env → "env"); `buildSecrets` asserts these are DISTINCT across the chain (fails loud on a
+	 *  duplicate — the connection/audit key must be unambiguous). */
+	name: string;
+	/** Resolve `ref` (the backend key, AFTER alias remap) to material, or `null` when this provider
+	 *  has no value for it. THROW for infrastructure failure — never coerce an outage into a miss. */
+	get: (ref: string, ctx: ResolveContext) => Promise<SecretMaterial | null>;
+	/** Per-provider remap of euroclaw's canonical name → this backend's key
+	 *  (`{ CANONICAL_NAME: backendKey }`). Pass-through when absent (zero config in the happy path). */
+	aliases?: Record<string, string>;
+	/** get-only vs set/delete/list — declared, not assumed. `env` is get-only (`manage: false`). */
+	capability: { manage: boolean };
+};
+
+/** The ONE door every subsystem resolves credentials through — built once from the provider chain
+ *  and injected into the invoker, egress, and channels. `get` returns `null` when no provider
+ *  resolves the name (the caller fails loud if it required it); `has` is the boot-coverage probe. */
+export type Secrets = {
+	get: (name: string, ctx?: ResolveContext) => Promise<SecretMaterial | null>;
+	has: (name: string, ctx?: ResolveContext) => Promise<boolean>;
+};

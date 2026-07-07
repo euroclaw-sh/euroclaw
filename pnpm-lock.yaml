@@ -150,6 +150,12 @@ importers:
 
   packages/foundation/errors: {}
 
+  packages/foundation/secrets:
+    dependencies:
+      '@euroclaw/contracts':
+        specifier: workspace:*
+        version: link:../contracts
+
   packages/foundation/vendors:
     dependencies:
       '@euroclaw/contracts':

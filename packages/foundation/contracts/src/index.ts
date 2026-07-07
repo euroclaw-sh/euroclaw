@@ -377,11 +377,15 @@ export type {
 	RegisteredToolStore,
 	SpecRegistrationStore,
 } from "./tools/registry-ports";
-// ── secret resolution: the invoker's credential port (adapters: env/SSM/Infisical/vault…) ──
+// ── secret resolution: the invoker's credential port + the one-door resolver (Secrets/
+//    SecretProvider/ResolveContext); providers + resolver impl live in @euroclaw/secrets ──
 export type {
+	ResolveContext,
 	SecretMaterial,
+	SecretProvider,
 	SecretRequest,
 	SecretResolver,
+	Secrets,
 } from "./tools/secrets";
 // ── tool sources: what every extractor produces (types only; impls in @euroclaw/runtime) ──
 export type {
