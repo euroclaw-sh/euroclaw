@@ -288,6 +288,7 @@ export type {
 	InferPluginSchema,
 	InferPlugins,
 	InferReasonCodes,
+	SecretProviderPlugin,
 	UnionToIntersection,
 } from "./governance/plugin";
 export type { ReasonCode } from "./governance/reason-codes";

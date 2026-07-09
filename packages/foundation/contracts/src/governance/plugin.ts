@@ -22,7 +22,11 @@ import type { ClawsStore } from "../claws/contracts";
 import type { EffectStore } from "../effects";
 import type { EntityField } from "../entity";
 import type { EventSink } from "../events";
-import type { SecretDeclaration, Secrets } from "../tools/secrets";
+import type {
+	SecretDeclaration,
+	SecretProvider,
+	Secrets,
+} from "../tools/secrets";
 import type { AfterGate, BoundaryGate, Gate } from "./boundary";
 import type { ReasonCode } from "./reason-codes";
 
@@ -127,6 +131,11 @@ export type EuroclawPlugin<
 	 *  collects these across plugins into the required-names set (boot coverage + `claw.api.secrets`).
 	 *  Always-on: needs no table, runs whether or not `dynamicSecretAliases` is enabled. */
 	secrets?: readonly SecretDeclaration[];
+	/** Secret backends this plugin OFFERS (`secrets` above declares NEEDS; this declares OFFERS). Read
+	 *  STATICALLY off the plugin object BEFORE the resolver is built (the assembly builds `secrets`
+	 *  before any plugin's `configure` runs) — never registered imperatively. Merged after
+	 *  `config.secrets`; duplicate provider names fail loud in buildSecrets. */
+	secretProviders?: readonly SecretProvider[];
 	/** Before-gates this plugin installs (decide). */
 	gates?: Gate[];
 	/** Boundary before-gates this plugin installs (decide across tool/model boundaries). */
@@ -143,6 +152,14 @@ export type EuroclawPlugin<
 	routes?: readonly EuroclawRoute[];
 	/** Scheduled work this plugin contributes. Framework adapters expose the cron trigger. */
 	cron?: readonly EuroclawCronTask[];
+};
+
+/** Producer-side narrowing for factories whose plugin's point is offering a secret backend
+ *  (a composed integration: provider + routes + schema in ONE plugin). Required and non-empty —
+ *  a "provider plugin" that provides nothing cannot compile. Assignable to EuroclawPlugin (an
+ *  intersection, not a union: the container field stays optional/wide, `plugins: []` stays homogeneous). */
+export type SecretProviderPlugin = EuroclawPlugin & {
+	secretProviders: readonly [SecretProvider, ...SecretProvider[]];
 };
 
 /** Union → intersection (a ubiquitous TS idiom — not better-auth-specific). */
