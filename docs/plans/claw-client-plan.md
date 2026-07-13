@@ -242,3 +242,14 @@ versions (mixed-version node_modules must merge cleanly).
 wire subpaths `./claw-api` + `./governance/endpoints` with the client's barrel-ban/allowlist/docless-source
 test (`packages/client/tests/contracts-wire.test.ts`), and `clawOpenApi` consuming the channel into the
 top-level request/response schema `description` (field-level surfacing deferred).
+
+**Follow-up slice (2026-07-13, Konstantin: "field.* descriptors should be able to emit docs too"
+— verified they cannot):** `EntityFieldMeta` has no doc surface, so entity-DERIVED boundary
+schemas (createClawInput, clawEntity.updateSchema(), channels list filter) are undocumentable —
+the doc-sweep correctly skips them. Fix = the field.json move applied to docs: `field.*` options
+gain `description?` (→ derived schemas .describe()) and `doc?` (→ euroclaw.doc), attached where
+each field materializes as an arktype Type in derivation; every derived record/create/patch
+schema inherits them; docOf/toJsonSchema unchanged. One declaration → type + validator + storage
++ docs. Future note (not built): description as SQL column comments via the generate CLI.
+Sequenced AFTER the doc-sweep commit (entity.ts must not race the writers), then a short second
+pass over the entity field maps.
