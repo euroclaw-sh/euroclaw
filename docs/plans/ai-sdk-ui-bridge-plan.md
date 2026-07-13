@@ -1,6 +1,9 @@
 # AI SDK UI bridge — `useChat` against a claw
 
-Status: **designed for ai@7 (verified 2026-07-13), ready to build** (slice A). Goal: a claw
+Status: **designed for ai@7 (verified 2026-07-13), SEQUENCED AFTER docs/plans/claw-client-plan.md**
+(Konstantin, 2026-07-13: the better-auth-shaped client comes first; this bridge's transport then
+rides the client's fetch/auth seam instead of a bare DefaultChatTransport). Slice A otherwise
+ready to build. Goal: a claw
 endpoint the AI-SDK client hooks (`useChat`, `@ai-sdk/react`) consume natively — the standard
 fullstack chat DX over a governed runtime. The repo is on `ai@7.0.22`, fixtures on the V4 model
 spec, and the slice-2 redaction read path (`view`, `$context.redaction`) is on main — this plan
