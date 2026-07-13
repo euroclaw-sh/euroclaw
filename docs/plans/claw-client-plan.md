@@ -173,3 +173,11 @@ declares everything the generator needs:
   phantom pattern scales); codegen would re-introduce drift.
 - No `view: "original"` from the client by default — server-side `authorize` decides (slice-2
   redaction rule).
+
+**Rejected (2026-07-13): `openApi` on createClaw + flag-gated description stripping.** A runtime
+config value cannot shrink a bundle (bundlers decide content at build time; `.describe()` calls are
+side-effectful and not conditionally shakeable), the described schemas are SERVER-side only (the
+client bundle is contracts+nanostores and never validates inputs), and `openApi` toggles a ROUTE —
+transport semantics that belong on the adapter (the redaction-group layering rule: config lives
+where the assembly acts on it). The zero-runtime shape already exists: standalone `clawOpenApi(claw)`
+at build time → static openapi.json, no route mounted.
