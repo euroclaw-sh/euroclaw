@@ -1,77 +1,84 @@
 # AI SDK UI bridge — `useChat` against a claw
 
-Status: **designed, ready to build** (slice A). Goal: a claw endpoint any AI-SDK client hook
-(`useChat`, `@ai-sdk/react`) consumes natively — the standard fullstack chat DX over a governed
-runtime. Wire protocol below was verified against the v5 docs; the repo has since moved to
-`ai@7.0.22` (2026-07-13) — RE-VERIFY the UI message stream header/part names against the v7
-`@ai-sdk/react` docs at build time (the v6/v7 migration guides did not change the concepts —
-tool-approval parts still exist — but part names and the protocol version header may differ).
+Status: **designed for ai@7 (verified 2026-07-13), ready to build** (slice A). Goal: a claw
+endpoint the AI-SDK client hooks (`useChat`, `@ai-sdk/react`) consume natively — the standard
+fullstack chat DX over a governed runtime. The repo is on `ai@7.0.22`, fixtures on the V4 model
+spec, and the slice-2 redaction read path (`view`, `$context.redaction`) is on main — this plan
+assumes all three.
 
-## The protocol (verified 2026-07-13)
+## Verified v7 surfaces (ai-sdk.dev, 2026-07-13)
 
-AI SDK 5 UI message streams are SSE with header `x-vercel-ai-ui-message-stream: v1`, JSON chunks,
-`data: [DONE]` terminator. Relevant part types: `start`/`finish`, `start-step`/`finish-step`,
-`text-start`/`text-delta`/`text-end`, `tool-input-available`, `tool-output-available`,
-**`tool-approval-request`/`tool-approval-response`** (native human-in-the-loop), `data-*`
-(custom), `error`.
+- **Server**: `createUIMessageStream` (exported from `"ai"`) — `execute({ writer })` with
+  `writer.write(part: UIMessageChunk)` (typed parts: `text-start/delta/end`, tool parts, data
+  parts) and `writer.merge(stream)`; `createUIMessageStreamResponse` /
+  `pipeUIMessageStreamToResponse` wrap it with the correct SSE headers. The bridge hand-rolls
+  NO wire format — it writes typed chunks and lets the SDK own the protocol.
+- **Client**: `useChat({ transport: new DefaultChatTransport({ api }) })`, `sendMessage({ text })`.
+  Tool parts render as `tool-${toolName}` with states; an approval renders as
+  `state: 'approval-requested'` carrying `part.approval.id`, answered by
+  `addToolApprovalResponse({ id, approved })`. Client-executed tools use `addToolOutput`.
+- **The approval id is ours to choose** → carry the euroclaw `approvalId` verbatim, and the
+  native client flow round-trips it with zero custom UI plumbing.
 
-The fit is unusually clean: euroclaw's runtime EVENTS are already the exact lifecycle the
-protocol streams, with REDACTED payloads — the default wire is leak-free by construction, which
-is a busyclaw selling point no `streamText`-direct backend has: `useChat` streams tokens
-(placeholders), never raw PII, unless the server explicitly serves the audited original view.
+## Slice A — event-driven bridge (no runtime/core changes)
 
-## Slice A — event-driven bridge (NO runtime/core changes)
+Home: **new package `packages/adapter/ai-sdk` (`@euroclaw/adapter-ai-sdk`)** — mirrors
+adapter-nextjs's posture (depends on the product package + peer `ai ^7`). adapter-core stays
+`ai`-free; vendors stays authoring-only.
 
-Everything required exists today: `api.sendMessage({ runId })` accepts a pre-allocated runId;
-every event envelope carries `runId` (`events.ts createRuntimeEvent`); event payloads are
-redacted; approvals park durably and `api.continueRun` resumes with recording context.
+Existing surfaces it composes (all on main today): `api.sendMessage({ runId })` accepts a
+pre-allocated runId; every event envelope carries `runId`; event payloads are redacted;
+approvals park durably; `api.continueRun` resumes with recording; `listMessages({ view })` and
+`$context.redaction` for the original view.
 
-New module in `@euroclaw/adapter-core` (fetch-shaped like `toRequestHandler` — works in TanStack
-Start server routes, Next, anything Request→Response):
-
-1. **`createUiStreamBroker(): { sink: RuntimeEventSink; subscribe(runId, listener): unsubscribe }`**
-   — installed ONCE at `createClaw({ events: [broker.sink, ...] })`; fans events out to per-run
-   listeners. Subscribe BEFORE `sendMessage` (runId pre-allocated) — no missed events.
+1. **`createUiStreamBroker()`** — a `RuntimeEventSink` installed once at
+   `createClaw({ events: [broker.sink, …] })`; `subscribe(runId, listener)` fans events out
+   per run. Subscribe BEFORE `sendMessage` — no missed events.
 2. **`clawChatHandler(claw, broker, options)`** → `(request: Request) => Promise<Response>`:
-   parses the useChat POST (client's `prepareSendMessagesRequest` supplies `{ clawId, threadId,
-   message }`), subscribes the runId, fires `api.sendMessage`, translates events → SSE parts:
-   - `run.started` → `start` + `start-step`
-   - `tool.called` → `tool-input-available` (redacted args verbatim)
-   - `tool.completed` → `tool-output-available` (redacted output verbatim)
-   - `tool.waiting_approval` → `tool-approval-request` (carry approvalIds)
-   - `tool.denied` / `tool.failed` → `data-governance` part / `error`
-   - awaited `sendMessage` result → `text-start` + ONE `text-delta` (full final text) +
-     `text-end` + `finish-step` + `finish` + `[DONE]`. Step-granular in slice A — tools appear
-     live as the run progresses; the answer lands as one part. (Token deltas are slice B; the
-     wire contract does not change.)
-3. **Approvals round-trip**: the client approval response routes to the same handler →
-   `api.grantApproval`/`denyApproval` + `api.continueRun` (recording-aware) → the continuation
-   streams as the next response in the same conversation. If the hook's native
-   `tool-approval-response` flow fights us on any detail, fall back to a `data-approval` part +
-   explicit approve/deny UI hitting the claw routes — still protocol-legal, still audited.
-4. **Views**: default wire = redacted. `view: "original"` (host-authorized, same trust model as
-   slice 2) rehydrates COMPLETE parts before emit — at part granularity there is no split-token
-   problem — and lands ONE `pii.reidentification` audit record per stream via `$context.redaction`.
-5. **History**: `toUIMessages(records)` mapper so `useChat` hydrates from
-   `listMessages({ view })`.
+   - POST body: `useChat`'s message payload plus host fields (`clawId`, `threadId`) via the
+     transport's request preparation; the handler takes the LAST user message's text.
+   - If the last message carries a **tool-approval-response part** → `api.grantApproval` /
+     `denyApproval` (by = the authenticated principal the HOST resolves) + `api.continueRun`,
+     and stream the continuation. Otherwise → new `runId`, subscribe, `api.sendMessage`.
+   - Translation inside `createUIMessageStream`'s `execute`:
+     `run.started` → `start`/`start-step`; `tool.called` → tool input part (redacted args
+     verbatim); `tool.completed` → tool output part (redacted output verbatim);
+     `tool.waiting_approval` → the approval-requested part with `approval.id = approvalId`;
+     `tool.denied`/`tool.failed` → `data-governance` part (a denial is a governed outcome, not
+     a transport error); awaited `sendMessage` result → one `text-start`+`text-delta`+`text-end`
+     block, `finish-step`, `finish`. Step-granular by design; tools and approvals appear live.
+3. **Views**: default wire = redacted (leak-free by construction — the bridge only rebroadcasts
+   already-governed events; a `streamText`-direct backend cannot make this claim). Host opts
+   into `view: "original"` per request (same trust model as slice 2): rehydrate COMPLETE parts
+   via `$context.redaction.original` before writing — part granularity has no split-token
+   problem — and land ONE `pii.reidentification` audit record per stream.
+4. **History**: `toUIMessages(records)` mapper (`listMessages({ view })` → `UIMessage[]`) so
+   `useChat` hydrates persisted transcripts; tool-call/result records map to their part types.
+5. **Verify at build (the one open detail)**: the exact POST body shape `DefaultChatTransport`
+   sends when `addToolApprovalResponse` fires (which message/part carries the response) —
+   documented flow, but pin the field names against the installed `@ai-sdk/react` types, not
+   the docs prose.
 
-Tests: broker filters by runId (two concurrent runs don't cross); SSE golden (header, part
-order, `[DONE]`); raw email never on the default wire; original view rehydrates + audits once;
-approval request part appears on `needs-approval`, continuation streams after grant; denied run
-emits `data-governance`, not `error`.
+Tests: broker isolates concurrent runs; golden stream (part order, headers via
+`createUIMessageStreamResponse`, `[DONE]`); raw email never on the default wire; original view
+rehydrates + audits once; approval part carries the euroclaw approvalId and the grant path
+streams the continuation; denial → `data-governance`, stream still finishes cleanly.
 
-## Slice B — true token streaming (runtime work, protocol unchanged)
+## Slice B — true token streaming (runtime work, wire unchanged)
 
-The loop is `generateText`-per-step; streaming means: a `doStream` path in the loop, middleware
-`wrapStream` (prompt redaction via `transformParams` already applies), a stream-aware model
-boundary in governance (gates BEFORE first token, audit on finish), and — for original-view
-streaming — a placeholder-boundary rehydration buffer (a `{{pii:…}}` token may split across
-chunks; hold back the longest suffix matching a token prefix). Sequence strictly after A: A
-ships the DX this week-shaped; B swaps one-delta-per-step for token deltas under the same wire.
+The loop is `generateText`-per-step; token deltas need: a `doStream` path in the loop emitting
+`LanguageModelV4StreamPart`s, middleware `wrapStream` (prompt redaction via `transformParams`
+already applies to both), a stream-aware governance model boundary (gates BEFORE the first
+token, audit on finish), and — for original-view streaming only — a placeholder-boundary
+rehydration buffer (a `{{pii:…}}` token can split across chunks; hold back the longest suffix
+matching a token prefix). Strictly after A: the client contract never changes, B swaps
+one-delta-per-step for token deltas under the same parts.
 
 ## Non-goals
 
-- No client-side governance, ever — the client is untrusted; the bridge only rebroadcasts
-  already-governed, already-redacted server events (mercury rule).
-- No parallel event schema: the bridge TRANSLATES runtime events; it never grows its own
-  lifecycle the runtime doesn't emit.
+- No client-side governance, ever — the client is untrusted; sealed gates stay server-side
+  (mercury rule). The bridge only rebroadcasts governed events.
+- No parallel event schema — the bridge TRANSLATES runtime events; it never grows a lifecycle
+  the runtime doesn't emit.
+- No `@ai-sdk/react` dependency server-side — the client hook is the consumer's dependency;
+  the bridge speaks the wire via `ai`'s stream helpers only.
