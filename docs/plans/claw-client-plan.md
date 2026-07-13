@@ -227,3 +227,13 @@ blessed helper pair in contracts — `doc(t, text)` writing the NAMESPACED meta 
 ownership like euroclaw__ context keys and the euroclaw tool stamp) and `docOf(t)` as the typed
 reader. Consumers read `docOf(t) ?? t.description`. Zero ambient types, collision-proof,
 user-invisible. Verify at build: arktype preserves unknown meta keys at runtime.
+
+**Mechanics re-amended (2026-07-13, Konstantin: typed extension of the namespaced key, cosmetic
+pollution accepted):** ship the global ArkEnv augmentation FOR THE NAMESPACED KEY —
+`meta(): { euroclaw?: { doc?: string } }` — so authoring is plain typed
+`.configure({ euroclaw: { doc } })` with zero casts; the write-side helper is dropped. The
+collision hazard was the ownerless key, and `euroclaw` as the name removes it; the accepted
+residue is one clearly-owned optional key in downstream autocomplete. Keep: `docOf(t)` as the ONE
+reader with precedence built in (`meta.euroclaw?.doc ?? description`); the client
+import-allowlist test unchanged. Standing rule: the augmented interface is ADDITIVE-ONLY across
+versions (mixed-version node_modules must merge cleanly).
