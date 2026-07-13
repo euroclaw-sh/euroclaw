@@ -253,3 +253,11 @@ schema inherits them; docOf/toJsonSchema unchanged. One declaration → type + v
 + docs. Future note (not built): description as SQL column comments via the generate CLI.
 Sequenced AFTER the doc-sweep commit (entity.ts must not race the writers), then a short second
 pass over the entity field maps.
+
+**BUILT 2026-07-13** — `field.*` meta gains the descriptor-only doc pair (`description`/`doc` on
+`EntityFieldMeta`, stripped by `entity().storage` so migrations never move); doc-carrying fields
+materialize in `shapeFor` (`describe` the INNER type before the `| undefined` union — required
+errors read "must be <description>", optional unions keep their branch rendering — with
+`euroclaw.doc` configured on the full property type for `docOf`), every derived
+record/create/patch schema inherits them, and the create-input `toJsonSchema()` carries property
+descriptions; second pass documented the claws entity field maps + channels registration fields.
