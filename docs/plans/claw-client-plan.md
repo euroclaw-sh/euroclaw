@@ -131,7 +131,7 @@ serves it + a Scalar reference UI. euroclaw's version is cheaper because slice 1
 declares everything the generator needs:
 
 - **Schemas carry their own docs**: arktype 2.2 metadata (`.describe()` / `.configure({...})`)
-  on input fields flows into `type.toJsonSchema()` output; `endpoints()` gains an optional
+  on input fields flows into `type.toJsonSchema()` output; `endpoints()` gains (per Konstantin 2026-07-13) an optional `output` arktype schema per endpoint — OpenAPI 200 becomes the envelope with `data = output.toJsonSchema()`, the handler return type is constrained by `output.infer` (schema and implementation cannot drift), and the client can infer `data` from it; NOT runtime-validated (outputs are trusted server code — arktype-at-boundaries). Plus the already-designed optional
   per-endpoint `description` (→ operation summary) and optional `output` schema (absent →
   the envelope with unspecified `data`). OpenAPI **3.1** target — natively JSON Schema, so
   `toJsonSchema()` output embeds without a 3.0 downcast. Exotic types (morphs/cyclic) use
