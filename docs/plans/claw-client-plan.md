@@ -24,6 +24,17 @@ nanostores reactivity, framework bindings as thin wrappers.
 
 ## Slice 1 (server) — routable plugin endpoints
 
+**BUILT 2026-07-13.** `endpoints()` lives in contracts (`governance/endpoints.ts`): the returned
+namespace IS the callable api (handlers exposed as-is), the flattened route table rides
+non-enumerably under `ENDPOINTS_METADATA` (`Symbol.for("euroclaw.endpoints")`, read via
+`endpointRoutesOf`). Nested definition records are GROUPS (`skills.packages.create` →
+`/packages/create`); compose by spreading DEFS records — spreading a built namespace drops the
+metadata. `toRequestHandler` walks `claw.api` (plain-object wrappers recurse, so
+`channels.registrations` mounts at its full key path) and validates at the boundary. All three
+contributors migrated: secrets, skills (simple + governed, substores included), channels
+registrations. One `toKebabCase` + `endpointHttpMethod` in contracts; the base api derives from
+the same pair.
+
 Evolve the plugin api contribution from bare closures to DECLARED endpoints:
 
 ```ts
