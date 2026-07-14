@@ -1,7 +1,10 @@
 # Observability — finish the events plane
 
-> Status: **proposed (2026-07-14)**, grounded in the docs/research corpus (mastra, junior,
-> nullclaw, picoclaw, hermes, zeroclaw, executor) + a full repo surface survey (same date).
+> Status: **BUILT (2026-07-14)** — slices 1–4: `fe38037` (fan-out split + catalog),
+> `7bdc3a0` (plugin.eventSinks), `9b8260d` (logEvents + @euroclaw/otel), slice 4 = this
+> commit (warn seam + plane-boundary notes). Grounded in the docs/research corpus (mastra,
+> junior, nullclaw, picoclaw, hermes, zeroclaw, executor) + a full repo surface survey
+> (same date).
 > Scope: make the operational event stream the standardized observability plane — typed
 > catalog with timing/usage, honest best-effort delivery, plugin subscription
 > (docs/plans/plugin-event-sinks.md, unbuilt), and the first consumers (dev log sink, OTel
