@@ -1,8 +1,10 @@
 # Observability — finish the events plane
 
-> Status: **BUILT (2026-07-14)** — slices 1–4: `fe38037` (fan-out split + catalog),
-> `7bdc3a0` (plugin.eventSinks), `9b8260d` (logEvents + @euroclaw/otel), slice 4 = this
-> commit (warn seam + plane-boundary notes). Grounded in the docs/research corpus (mastra,
+> Status: **BUILT (2026-07-14)** — slices 1–6: `fe38037` (fan-out split + catalog),
+> `7bdc3a0` (plugin.eventSinks), `9b8260d` (logEvents + @euroclaw/otel), `c49d38f`
+> (warn seam + plane-boundary notes), `23924a7` (door redaction), slice 6 (plugin
+> redaction handles) = this commit. Grounded
+> in the docs/research corpus (mastra,
 > junior, nullclaw, picoclaw, hermes, zeroclaw, executor) + a full repo surface survey
 > (same date).
 > Scope: make the operational event stream the standardized observability plane — typed
@@ -145,6 +147,47 @@ here), the runtime tool-collision warn (`runtime.ts:421`), and the new observer-
 failure reports (§1). Not a logger — no levels, no structure, no transport; it's the one
 injectable door for "euroclaw wants to tell the operator something outside the event
 stream". Existing per-surface options keep working (they win over the default).
+
+### Slice 5 (added 2026-07-14) — door redaction
+
+The plugin emit door (`ctx.events.emit`) redacts the plugin-authored payload BEFORE fan-out,
+but only under redacted postures:
+
+- No detector/custom redactor (the raw recipe) or posture `raw` → passthrough, byte-identical
+  (the door never even walks the payload).
+- `strict` → every door event: with `recording` present → into that claw's
+  (`"claw"`, clawId) container — the same container the transcript write uses; claw-less
+  (boot/cron/webhook) → into the emitting plugin's (`"plugin"`, id) container.
+- `per-claw` → with `recording`, the claw's birth posture decides via the ONE routing
+  redactor transcript writes use; claw-less FAILS CLOSED into the per-plugin container.
+
+Each plugin gets its OWN door (the assembly binds `plugin.id` per configure context) — per-
+plugin containers need attribution, never a shared bucket. The envelope (`type`, `id`,
+`createdAt`, `runId`, `recording`) stays verbatim. The runtime's own kinds are unaffected
+(redacted at their source boundaries; `emitRuntimeEvent` never routes through the door).
+
+### Slice 6 (added 2026-07-14) — plugin redaction handles
+
+Two assembly-provided methods on every plugin's configure context, bound per plugin in the same
+context clone as the emit door, over the same slice-5 machinery (the ONE resolved redactor, the
+same containers):
+
+- `redact?: (value: unknown, opts?: { clawId?: string; subjectIds?: readonly string[] }) =>
+  Promise<unknown>` — tokenize plugin-held data, the safe direction. No `clawId` → the plugin's
+  own (`"plugin"`, id) container (exactly the slice-5 door container); with `clawId` → the claw's
+  (`"claw"`, clawId) container — the SAME container transcript writes use, so the same value wears
+  the same token, and per-claw birth posture decides via the one routing redactor (never a second
+  posture path). `subjectIds` joins the mappings to the erasure index, so `forgetSubject` reaches
+  plugin-held rows.
+- `rehydrate?: (value: unknown) => Promise<unknown>` — resolves ONLY within the plugin's own
+  (`"plugin"`, id) container; deliberately no `clawId` option. A claw/transcript token is INERT
+  here by containment (the mapping store resolves a placeholder only within its minting container
+  — structural, no token filtering). Every call against an armed redactor appends one audit record
+  (boundary `privacy`, name `pii.reidentification`, status `ok`, the plugin container in the
+  payload) when audit is configured; no audit → skip silently, same as the api's read-side views.
+
+Unarmed (no detector/custom redactor, or posture `raw`) both methods are the identity function —
+always present on the context, so plugin code runs unchanged in both modes.
 
 ## Non-goals
 
